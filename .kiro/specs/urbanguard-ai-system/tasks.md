@@ -178,20 +178,20 @@ The implementation follows an incremental approach: project setup → backend co
     - **Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5, 8.1, 8.2**
 
 - [ ] 8. Implement Incident_Predictor component
-  - [ ] 8.1 Implement incident prediction logic
+  - [x] 8.1 Implement incident prediction logic
     - Generate predictions for zones with risk_score > 70
     - Determine incident type from dominant complaint category
     - Implement special rules for flooding (high rainfall + flood complaints)
     - Implement special rules for gridlock (high traffic + traffic complaints)
     - _Requirements: 9.1, 9.2, 9.3, 9.4_
 
-  - [ ] 8.2 Implement time window determination
+  - [x] 8.2 Implement time window determination
     - Assign "next 6 hours" for risk_score > 85
     - Assign "next 24 hours" for risk_score 70-85
     - Include contributing factors in predictions
     - _Requirements: 9.5_
 
-  - [ ] 8.3 Write property tests for incident prediction
+  - [x] 8.3 Write property tests for incident prediction
     - **Property 27: Incident Prediction for High-Risk Zones** - Predictions for score > 70
     - **Property 28: Incident Type Matches Dominant Category** - Type matches dominant category
     - **Property 29: Flooding Incident Prediction** - High rainfall + floods predicts flooding
