@@ -1,0 +1,4 @@
+# file: C:\Hackathon\backend\models.py
+# hypothesis_version: 6.151.9
+
+[1.0, 'construction', 'flooding', 'garbage', 'high', 'low', 'medium', 'noise', 'openweathermap', 'pothole', 'streetlight', 'traffic', 'water_supply']

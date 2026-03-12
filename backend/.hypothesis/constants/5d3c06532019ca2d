@@ -1,0 +1,4 @@
+# file: C:\Hackathon\backend\ai_classifier.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.1, 0.3, 0.5, 0.85, 0.9, 1.0, 100, ',', ', ', 'AWS_REGION', 'BEDROCK_MODEL_ID', 'CLOSED', 'HALF_OPEN', 'OPEN', 'anthropic', 'anthropic.claude-v2', 'bedrock-runtime', 'body', 'completion', 'garbage', 'generated_text', 'max_attempts', 'max_tokens', 'max_tokens_to_sample', 'prompt', 'temperature', 'top_p', 'us-east-1']

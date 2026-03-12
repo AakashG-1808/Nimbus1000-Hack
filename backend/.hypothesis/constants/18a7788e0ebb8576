@@ -1,0 +1,4 @@
+# file: C:\Hackathon\backend\main.py
+# hypothesis_version: 6.151.9
+
+[8000, '*', '/', '/health', '/traffic', '/weather', '0.0.0.0', '1.0.0', 'UrbanGuard AI System', '__main__', 'complaint_count', 'complaints', 'congestion_level', 'congestion_score', 'healthy', 'high_rainfall_flag', 'humidity_percent', 'location', 'main:app', 'message', 'reports', 'risk_zones', 'running', 'source', 'status', 'temperature_celsius', 'timestamp', 'wind_speed_kmh']

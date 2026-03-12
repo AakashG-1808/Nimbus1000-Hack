@@ -1,0 +1,4 @@
+# file: C:\Hackathon\backend\main.py
+# hypothesis_version: 6.151.9
+
+[8000, '*', '/', '/clusters', '/health', '/traffic', '/weather', '0.0.0.0', '1.0.0', 'UrbanGuard AI System', '__main__', 'category', 'center_coordinates', 'cluster_id', 'complaint_count', 'complaint_id', 'complaints', 'congestion_level', 'congestion_score', 'density_per_km2', 'description', 'healthy', 'high_rainfall_flag', 'humidity_percent', 'is_high_density', 'latitude', 'location', 'longitude', 'main:app', 'message', 'radius_meters', 'reports', 'risk_zones', 'running', 'source', 'status', 'temperature_celsius', 'time_window_hours', 'timestamp', 'wind_speed_kmh']

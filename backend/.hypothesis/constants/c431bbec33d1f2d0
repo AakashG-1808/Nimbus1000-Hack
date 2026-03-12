@@ -1,0 +1,4 @@
+# file: C:\Hackathon\backend\simulated_data.py
+# hypothesis_version: 6.151.9
+
+[0.7, 0.9, 1.0, 'construction', 'flooding', 'garbage', 'noise', 'pothole', 'streetlight', 'traffic', 'water_supply']
