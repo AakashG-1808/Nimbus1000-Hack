@@ -393,28 +393,28 @@ The implementation follows an incremental approach: project setup → backend co
     - **Property 44: Traffic Congestion Color Coding** - Correct colors for levels
     - **Validates: Requirements 16.1, 16.2**
 
-- [ ] 20. Checkpoint - Frontend components complete
+- [x] 20. Checkpoint - Frontend components complete
   - Ensure all frontend components render correctly with test data
   - Verify real-time updates working (30-second polling)
   - Test responsive design on different screen sizes
   - Verify all visualizations (map, charts, panels) functional
   - Ask the user if questions arise
 
-- [ ] 21. Integration and end-to-end testing
-  - [ ] 21.1 Implement complaint submission flow
+- [x] 21. Integration and end-to-end testing
+  - [x] 21.1 Implement complaint submission flow
     - Create complaint submission form in React
     - Connect form to POST /report-complaint endpoint
     - Display success/error messages to user
     - Update map and feed with new complaint within 5 seconds
     - _Requirements: 1.1, 12.2_
 
-  - [ ] 21.2 Test real-time dashboard updates
+  - [x] 21.2 Test real-time dashboard updates
     - Verify new complaints appear in feed within 5 seconds
     - Verify risk zone colors update within 10 seconds of score changes
     - Test with multiple simulated complaints
     - _Requirements: 12.2, 12.3_
 
-  - [ ] 21.3 Test performance requirements
+  - [x] 21.3 Test performance requirements
     - Verify API response times meet requirements (< 100ms, < 200ms, < 300ms, < 500ms)
     - Test with 1000+ complaints
     - Simulate 100 concurrent users (if load testing tools available)

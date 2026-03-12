@@ -30,7 +30,15 @@ class InMemoryStorage:
     def get_all_complaints(self) -> List[Complaint]:
         """Retrieve all complaints sorted by timestamp descending"""
         with self._lock:
-            return sorted(self._complaints, key=lambda c: c.timestamp, reverse=True)
+            # Sort complaints, handling both timezone-aware and naive datetimes
+            def get_timestamp(complaint):
+                ts = complaint.timestamp
+                # Convert timezone-aware to naive for comparison
+                if hasattr(ts, 'tzinfo') and ts.tzinfo is not None:
+                    return ts.replace(tzinfo=None)
+                return ts
+            
+            return sorted(self._complaints, key=get_timestamp, reverse=True)
     
     def get_complaints_by_location(self, location: str) -> List[Complaint]:
         """Retrieve complaints for a specific location"""

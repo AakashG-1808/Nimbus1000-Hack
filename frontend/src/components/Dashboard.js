@@ -5,6 +5,7 @@ import ComplaintFeed from './ComplaintFeed';
 import TrendCharts from './TrendCharts';
 import WeatherPanel from './WeatherPanel';
 import TrafficPanel from './TrafficPanel';
+import ComplaintForm from './ComplaintForm';
 import './Dashboard.css';
 
 /**
@@ -22,6 +23,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [showComplaintForm, setShowComplaintForm] = useState(false);
 
   // Fetch all dashboard data
   const fetchDashboardData = useCallback(async () => {
@@ -64,6 +66,14 @@ const Dashboard = () => {
     return () => clearInterval(pollInterval);
   }, [fetchDashboardData]);
 
+  // Handle successful complaint submission
+  const handleComplaintSubmitSuccess = () => {
+    // Close the modal
+    setShowComplaintForm(false);
+    // Immediately refresh dashboard data
+    fetchDashboardData();
+  };
+
   if (loading && !lastUpdate) {
     return (
       <div className="dashboard-loading">
@@ -77,6 +87,12 @@ const Dashboard = () => {
     <div className="dashboard">
       <div className="dashboard-header">
         <h1>UrbanGuard AI Dashboard</h1>
+        <button 
+          className="report-complaint-button"
+          onClick={() => setShowComplaintForm(true)}
+        >
+          + Report Complaint
+        </button>
         {lastUpdate && (
           <div className="last-update">
             Last updated: {lastUpdate.toLocaleTimeString()}
@@ -88,6 +104,22 @@ const Dashboard = () => {
           </div>
         )}
       </div>
+
+      {/* Complaint Form Modal */}
+      {showComplaintForm && (
+        <div className="modal-overlay" onClick={() => setShowComplaintForm(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="modal-close"
+              onClick={() => setShowComplaintForm(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <ComplaintForm onSubmitSuccess={handleComplaintSubmitSuccess} />
+          </div>
+        </div>
+      )}
 
       <div className="dashboard-grid">
         {/* Map Section - Main visualization area */}
