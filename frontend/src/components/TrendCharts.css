@@ -1,0 +1,46 @@
+.trend-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 300px;
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.chart-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .trend-charts {
+    padding: 12px;
+    gap: 16px;
+  }
+
+  .chart-container {
+    height: 250px;
+    padding: 12px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .chart-container {
+    height: 350px;
+  }
+}

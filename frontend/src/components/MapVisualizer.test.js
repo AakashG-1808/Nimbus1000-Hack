@@ -27,6 +27,15 @@ jest.mock('react-leaflet', () => ({
       {children}
     </div>
   ),
+  Marker: ({ children, position, ...props }) => (
+    <div 
+      data-testid="complaint-marker" 
+      data-position={JSON.stringify(position)}
+      {...props}
+    >
+      {children}
+    </div>
+  ),
   Popup: ({ children }) => (
     <div data-testid="popup">
       {children}
@@ -307,5 +316,280 @@ describe('MapVisualizer Risk Zone Visualization', () => {
     
     const circle = screen.getByTestId('risk-zone-circle');
     expect(circle).toBeInTheDocument();
+  });
+});
+
+
+describe('MapVisualizer Complaint Marker Display', () => {
+  test('renders complaint markers for all complaints', () => {
+    const mockComplaints = [
+      {
+        complaint_id: 'c1',
+        location: 'Koramangala',
+        category: 'pothole',
+        description: 'Large pothole on main road',
+        timestamp: '2024-01-15T10:30:00Z',
+        coordinates: { latitude: 12.9352, longitude: 77.6245 }
+      },
+      {
+        complaint_id: 'c2',
+        location: 'Indiranagar',
+        category: 'flooding',
+        description: 'Water logging issue',
+        timestamp: '2024-01-15T11:00:00Z',
+        coordinates: { latitude: 12.9716, longitude: 77.6412 }
+      },
+      {
+        complaint_id: 'c3',
+        location: 'Whitefield',
+        category: 'traffic',
+        description: 'Heavy traffic congestion',
+        timestamp: '2024-01-15T12:00:00Z',
+        coordinates: { latitude: 12.9698, longitude: 77.7499 }
+      }
+    ];
+
+    render(<MapVisualizer complaints={mockComplaints} />);
+    
+    // Check that markers are rendered for each complaint
+    const markers = screen.getAllByTestId('complaint-marker');
+    expect(markers).toHaveLength(3);
+  });
+
+  test('displays complaint details in marker popup', () => {
+    const mockComplaints = [
+      {
+        complaint_id: 'c1',
+        location: 'Koramangala',
+        category: 'pothole',
+        description: 'Large pothole on main road',
+        timestamp: '2024-01-15T10:30:00Z',
+        coordinates: { latitude: 12.9352, longitude: 77.6245 }
+      }
+    ];
+
+    render(<MapVisualizer complaints={mockComplaints} />);
+    
+    // Check that complaint details are displayed (text-transform: capitalize is CSS only)
+    expect(screen.getByText('pothole')).toBeInTheDocument();
+    expect(screen.getByText('Koramangala')).toBeInTheDocument();
+    expect(screen.getByText('Large pothole on main road')).toBeInTheDocument();
+  });
+
+  test('handles complaints with array coordinate format', () => {
+    const mockComplaints = [
+      {
+        complaint_id: 'c1',
+        location: 'Koramangala',
+        category: 'pothole',
+        description: 'Test complaint',
+        timestamp: '2024-01-15T10:30:00Z',
+        coordinates: [12.9352, 77.6245] // Array format
+      }
+    ];
+
+    render(<MapVisualizer complaints={mockComplaints} />);
+    
+    const markers = screen.getAllByTestId('complaint-marker');
+    expect(markers).toHaveLength(1);
+  });
+
+  test('handles complaints with object coordinate format', () => {
+    const mockComplaints = [
+      {
+        complaint_id: 'c1',
+        location: 'Koramangala',
+        category: 'pothole',
+        description: 'Test complaint',
+        timestamp: '2024-01-15T10:30:00Z',
+        coordinates: { latitude: 12.9352, longitude: 77.6245 } // Object format
+      }
+    ];
+
+    render(<MapVisualizer complaints={mockComplaints} />);
+    
+    const markers = screen.getAllByTestId('complaint-marker');
+    expect(markers).toHaveLength(1);
+  });
+
+  test('skips complaints with invalid coordinates', () => {
+    const mockComplaints = [
+      {
+        complaint_id: 'c1',
+        location: 'Koramangala',
+        category: 'pothole',
+        description: 'Valid complaint',
+        timestamp: '2024-01-15T10:30:00Z',
+        coordinates: { latitude: 12.9352, longitude: 77.6245 }
+      },
+      {
+        complaint_id: 'c2',
+        location: 'Indiranagar',
+        category: 'flooding',
+        description: 'Invalid coordinates',
+        timestamp: '2024-01-15T11:00:00Z',
+        coordinates: null // Invalid
+      },
+      {
+        complaint_id: 'c3',
+        location: 'Whitefield',
+        category: 'traffic',
+        description: 'Missing coordinates',
+        timestamp: '2024-01-15T12:00:00Z',
+        coordinates: {} // Invalid
+      }
+    ];
+
+    // Should not crash
+    render(<MapVisualizer complaints={mockComplaints} />);
+    
+    // Only valid complaint should be rendered
+    const markers = screen.getAllByTestId('complaint-marker');
+    expect(markers).toHaveLength(1);
+  });
+
+  test('displays different complaint categories', () => {
+    const mockComplaints = [
+      {
+        complaint_id: 'c1',
+        location: 'Koramangala',
+        category: 'pothole',
+        description: 'Pothole issue',
+        timestamp: '2024-01-15T10:30:00Z',
+        coordinates: { latitude: 12.9352, longitude: 77.6245 }
+      },
+      {
+        complaint_id: 'c2',
+        location: 'Indiranagar',
+        category: 'water_supply',
+        description: 'Water supply issue',
+        timestamp: '2024-01-15T11:00:00Z',
+        coordinates: { latitude: 12.9716, longitude: 77.6412 }
+      }
+    ];
+
+    render(<MapVisualizer complaints={mockComplaints} />);
+    
+    // Check that different categories are displayed (text-transform: capitalize is CSS only)
+    expect(screen.getByText('pothole')).toBeInTheDocument();
+    expect(screen.getByText('water supply')).toBeInTheDocument();
+  });
+
+  test('formats timestamp for display', () => {
+    const mockComplaints = [
+      {
+        complaint_id: 'c1',
+        location: 'Koramangala',
+        category: 'pothole',
+        description: 'Test complaint',
+        timestamp: '2024-01-15T10:30:00Z',
+        coordinates: { latitude: 12.9352, longitude: 77.6245 }
+      }
+    ];
+
+    render(<MapVisualizer complaints={mockComplaints} />);
+    
+    // Check that timestamp is formatted (should contain date elements)
+    expect(screen.getByText(/Jan|15|2024/)).toBeInTheDocument();
+  });
+
+  test('displays complaint ID in popup', () => {
+    const mockComplaints = [
+      {
+        complaint_id: 'abc123def456',
+        location: 'Koramangala',
+        category: 'pothole',
+        description: 'Test complaint',
+        timestamp: '2024-01-15T10:30:00Z',
+        coordinates: { latitude: 12.9352, longitude: 77.6245 }
+      }
+    ];
+
+    render(<MapVisualizer complaints={mockComplaints} />);
+    
+    // Check that complaint ID is displayed (truncated)
+    expect(screen.getByText(/abc123de/)).toBeInTheDocument();
+  });
+
+  test('renders both risk zones and complaint markers together', () => {
+    const mockRiskZones = [
+      {
+        zone_id: 'zone-1',
+        center_coordinates: [12.9352, 77.6245],
+        risk_score: 45,
+        complaint_count: 8
+      }
+    ];
+
+    const mockComplaints = [
+      {
+        complaint_id: 'c1',
+        location: 'Koramangala',
+        category: 'pothole',
+        description: 'Test complaint',
+        timestamp: '2024-01-15T10:30:00Z',
+        coordinates: { latitude: 12.9352, longitude: 77.6245 }
+      },
+      {
+        complaint_id: 'c2',
+        location: 'Indiranagar',
+        category: 'flooding',
+        description: 'Another complaint',
+        timestamp: '2024-01-15T11:00:00Z',
+        coordinates: { latitude: 12.9716, longitude: 77.6412 }
+      }
+    ];
+
+    render(
+      <MapVisualizer 
+        riskZones={mockRiskZones} 
+        complaints={mockComplaints} 
+      />
+    );
+    
+    // Check that both risk zones and markers are rendered
+    const circles = screen.getAllByTestId('risk-zone-circle');
+    expect(circles).toHaveLength(1);
+    
+    const markers = screen.getAllByTestId('complaint-marker');
+    expect(markers).toHaveLength(2);
+  });
+
+  test('updates markers when complaints data changes', () => {
+    const initialComplaints = [
+      {
+        complaint_id: 'c1',
+        location: 'Koramangala',
+        category: 'pothole',
+        description: 'Test complaint',
+        timestamp: '2024-01-15T10:30:00Z',
+        coordinates: { latitude: 12.9352, longitude: 77.6245 }
+      }
+    ];
+
+    const { rerender } = render(<MapVisualizer complaints={initialComplaints} />);
+    
+    // Initially 1 marker
+    let markers = screen.getAllByTestId('complaint-marker');
+    expect(markers).toHaveLength(1);
+
+    // Update with more complaints
+    const updatedComplaints = [
+      ...initialComplaints,
+      {
+        complaint_id: 'c2',
+        location: 'Indiranagar',
+        category: 'flooding',
+        description: 'New complaint',
+        timestamp: '2024-01-15T11:00:00Z',
+        coordinates: { latitude: 12.9716, longitude: 77.6412 }
+      }
+    ];
+
+    rerender(<MapVisualizer complaints={updatedComplaints} />);
+    
+    // Now 2 markers
+    markers = screen.getAllByTestId('complaint-marker');
+    expect(markers).toHaveLength(2);
   });
 });

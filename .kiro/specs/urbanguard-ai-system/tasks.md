@@ -330,65 +330,65 @@ The implementation follows an incremental approach: project setup → backend co
     - **Property 34: Risk Zone Color Coding** - Correct colors for risk levels
     - **Validates: Requirements 11.2**
 
-  - [ ] 15.4 Implement complaint marker display
+  - [x] 15.4 Implement complaint marker display
     - Render complaint locations as map markers
     - Add marker icons for different complaint categories
     - Implement marker click handler to show complaint details
     - Update markers every 30 seconds with new data
     - _Requirements: 11.4, 11.5_
 
-  - [ ] 15.5 Write property test for complaint markers
+  - [x] 15.5 Write property test for complaint markers
     - **Property 35: Complaint Marker Display** - All complaints shown as markers
     - **Validates: Requirements 11.4**
 
 - [ ] 16. Implement ComplaintFeed component
-  - [ ] 16.1 Create complaint feed display
+  - [x] 16.1 Create complaint feed display
     - Display 20 most recent complaints in chronological order
     - Show location, category, description, timestamp for each
     - Implement auto-scroll for new complaints
     - Add new complaints to top of feed within 5 seconds
     - _Requirements: 13.1, 13.2, 13.3, 13.4_
 
-  - [ ] 16.2 Write property tests for complaint feed
+  - [x] 16.2 Write property tests for complaint feed
     - **Property 36: Recent Complaints Feed Selection** - 20 most recent shown
     - **Property 37: Complaint Feed Display Completeness** - All fields displayed
     - **Validates: Requirements 13.1, 13.3**
 
 - [ ] 17. Implement TrendCharts component
-  - [ ] 17.1 Implement Chart.js visualizations
+  - [x] 17.1 Implement Chart.js visualizations
     - Create 7-day complaint volume trend chart
     - Create risk score trend chart for top 5 high-risk zones
     - Configure chart styling and responsive sizing
     - Update charts every 5 minutes
     - _Requirements: 14.1, 14.2, 14.3, 14.4_
 
-  - [ ] 17.2 Write property tests for trend charts
+  - [x] 17.2 Write property tests for trend charts
     - **Property 38: Seven-Day Complaint Volume Trend** - 7 days of data shown
     - **Property 39: Top Five Risk Zone Trends** - Top 5 zones identified and displayed
     - **Validates: Requirements 14.2, 14.3**
 
 - [ ] 18. Implement WeatherPanel component
-  - [ ] 18.1 Create weather display panel
+  - [x] 18.1 Create weather display panel
     - Display temperature, humidity, precipitation, wind speed
     - Show weather icons for current conditions
     - Highlight panel in red when high rainfall detected
     - Update display every 30 minutes
     - _Requirements: 15.1, 15.2, 15.3, 15.4_
 
-  - [ ] 18.2 Write property tests for weather panel
+  - [x] 18.2 Write property tests for weather panel
     - **Property 40: Weather Display Completeness** - All weather fields shown
     - **Property 41: High Rainfall Weather Panel Highlighting** - Red highlight for high rainfall
     - **Property 42: Weather Icon Selection** - Icons match conditions
     - **Validates: Requirements 15.1, 15.3, 15.4**
 
 - [ ] 19. Implement TrafficPanel component
-  - [ ] 19.1 Create traffic display panel
+  - [x] 19.1 Create traffic display panel
     - Display traffic congestion for 10+ key Bengaluru locations
     - Apply color coding: green (low), yellow (medium), red (high)
     - Update display every 10 minutes
     - _Requirements: 16.1, 16.2, 16.3, 16.4_
 
-  - [ ] 19.2 Write property test for traffic panel
+  - [x] 19.2 Write property test for traffic panel
     - **Property 43: Traffic Location Display** - Major locations shown
     - **Property 44: Traffic Congestion Color Coding** - Correct colors for levels
     - **Validates: Requirements 16.1, 16.2**

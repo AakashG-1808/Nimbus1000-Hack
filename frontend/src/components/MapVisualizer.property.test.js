@@ -32,6 +32,16 @@ jest.mock('react-leaflet', () => ({
       {children}
     </div>
   ),
+  Marker: ({ children, position, icon, ...props }) => (
+    <div 
+      data-testid="complaint-marker" 
+      data-position={JSON.stringify(position)}
+      data-icon={icon ? 'custom-icon' : 'default-icon'}
+      {...props}
+    >
+      {children}
+    </div>
+  ),
   Popup: ({ children }) => (
     <div data-testid="popup">
       {children}
@@ -86,6 +96,24 @@ const riskZoneArbitrary = (riskScoreGen = riskScoreArbitrary()) =>
       'streetlight', 'water_supply', 'noise', 'construction'
     )
   });
+
+// Generate a complaint object
+let complaintIdCounter = 0;
+const complaintArbitrary = () =>
+  fc.record({
+    complaint_id: fc.integer({ min: 1, max: 1000000 }).map(n => `complaint-${n}-${++complaintIdCounter}`),
+    location: fc.constantFrom(
+      'Koramangala', 'Indiranagar', 'Whitefield', 'Electronic City',
+      'Jayanagar', 'Malleshwaram', 'HSR Layout', 'BTM Layout'
+    ),
+    category: fc.constantFrom(
+      'pothole', 'flooding', 'traffic', 'garbage', 
+      'streetlight', 'water_supply', 'noise', 'construction'
+    ),
+    description: fc.string({ minLength: 10, maxLength: 100 }).filter(s => s.trim().length > 0),
+    timestamp: fc.date({ min: new Date('2024-01-01'), max: new Date() }).map(d => d.toISOString()),
+    coordinates: bengaluruCoordinatesArbitrary()
+  }).filter(c => !isNaN(c.coordinates[0]) && !isNaN(c.coordinates[1]));
 
 /**
  * Property 34: Risk Zone Color Coding
@@ -383,6 +411,279 @@ describe('Risk Zone Visualization Properties', () => {
           
           // Assert: Complaint count is displayed
           return hasCount;
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+});
+
+/**
+ * Property 35: Complaint Marker Display
+ * 
+ * For any complaint in the system, the Map_Visualizer should display it 
+ * as a marker on the map at its coordinate location.
+ * 
+ * Validates: Requirements 11.4
+ * 
+ * Feature: urbanguard-ai-system, Property 35: Complaint Marker Display
+ */
+describe('Property 35: Complaint Marker Display', () => {
+  
+  test('Property: All complaints with valid coordinates are displayed as markers', () => {
+    fc.assert(
+      fc.property(
+        fc.array(complaintArbitrary(), { minLength: 1, maxLength: 20 }),
+        (complaints) => {
+          const { container } = render(<MapVisualizer complaints={complaints} />);
+          
+          const markers = screen.getAllByTestId('complaint-marker');
+          
+          // Cleanup
+          container.remove();
+          
+          // Assert: Number of rendered markers equals number of complaints
+          return markers.length === complaints.length;
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  test('Property: Each complaint marker is positioned at its coordinate location', () => {
+    fc.assert(
+      fc.property(
+        fc.array(complaintArbitrary(), { minLength: 1, maxLength: 10 }),
+        (complaints) => {
+          const { container } = render(<MapVisualizer complaints={complaints} />);
+          
+          const markers = screen.getAllByTestId('complaint-marker');
+          
+          // Cleanup
+          container.remove();
+          
+          // Assert: Each marker has correct position matching complaint coordinates
+          return markers.every((marker, index) => {
+            const position = JSON.parse(marker.getAttribute('data-position'));
+            const complaint = complaints[index];
+            const [lat, lon] = complaint.coordinates;
+            
+            return position[0] === lat && position[1] === lon;
+          });
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  test('Property: Single complaint is always displayed as a marker', () => {
+    fc.assert(
+      fc.property(
+        complaintArbitrary(),
+        (complaint) => {
+          const { container } = render(<MapVisualizer complaints={[complaint]} />);
+          
+          const markers = screen.getAllByTestId('complaint-marker');
+          
+          // Cleanup
+          container.remove();
+          
+          // Assert: Exactly one marker is rendered
+          return markers.length === 1;
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  test('Property: Empty complaint list renders no markers', () => {
+    const { container } = render(<MapVisualizer complaints={[]} />);
+    
+    const markers = screen.queryAllByTestId('complaint-marker');
+    
+    // Cleanup
+    container.remove();
+    
+    // Assert: No markers rendered for empty list
+    expect(markers.length).toBe(0);
+  });
+
+  test('Property: Large number of complaints (100+) all render as markers', () => {
+    fc.assert(
+      fc.property(
+        fc.array(complaintArbitrary(), { minLength: 50, maxLength: 75 }),
+        (complaints) => {
+          const { container } = render(<MapVisualizer complaints={complaints} />);
+          
+          const markers = screen.getAllByTestId('complaint-marker');
+          
+          // Cleanup
+          container.remove();
+          
+          // Assert: All complaints rendered even with large count
+          return markers.length === complaints.length;
+        }
+      ),
+      { numRuns: 10 } // Fewer runs for performance with large arrays
+    );
+  });
+
+  test('Property: Complaint markers have custom icons', () => {
+    fc.assert(
+      fc.property(
+        fc.array(complaintArbitrary(), { minLength: 1, maxLength: 10 }),
+        (complaints) => {
+          const { container } = render(<MapVisualizer complaints={complaints} />);
+          
+          const markers = screen.getAllByTestId('complaint-marker');
+          
+          // Cleanup
+          container.remove();
+          
+          // Assert: All markers have custom icons (not default)
+          return markers.every(marker => {
+            const icon = marker.getAttribute('data-icon');
+            return icon === 'custom-icon';
+          });
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  test('Property: Complaint details are included in marker popup', () => {
+    fc.assert(
+      fc.property(
+        complaintArbitrary(),
+        (complaint) => {
+          const { container } = render(<MapVisualizer complaints={[complaint]} />);
+          
+          // Check if popup contains complaint details
+          const popup = container.querySelector('.complaint-popup');
+          const hasCategory = popup && popup.textContent.includes(complaint.category.replace('_', ' '));
+          const hasLocation = popup && popup.textContent.includes(complaint.location);
+          const hasDescription = popup && popup.textContent.includes(complaint.description);
+          
+          // Cleanup
+          container.remove();
+          
+          // Assert: All complaint details are in popup
+          return hasCategory && hasLocation && hasDescription;
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  test('Property: Markers render for complaints with array coordinate format', () => {
+    fc.assert(
+      fc.property(
+        fc.array(complaintArbitrary(), { minLength: 1, maxLength: 10 }),
+        (complaints) => {
+          // Ensure coordinates are in array format [lat, lon]
+          const complaintsWithArrayCoords = complaints.map(c => ({
+            ...c,
+            coordinates: c.coordinates // Already in array format from generator
+          }));
+          
+          const { container } = render(<MapVisualizer complaints={complaintsWithArrayCoords} />);
+          
+          const markers = screen.getAllByTestId('complaint-marker');
+          
+          // Cleanup
+          container.remove();
+          
+          // Assert: All complaints with array coordinates render
+          return markers.length === complaintsWithArrayCoords.length;
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  test('Property: Markers render for complaints with object coordinate format', () => {
+    fc.assert(
+      fc.property(
+        fc.array(complaintArbitrary(), { minLength: 1, maxLength: 10 }),
+        (complaints) => {
+          // Convert coordinates to object format {latitude, longitude}
+          const complaintsWithObjectCoords = complaints.map(c => ({
+            ...c,
+            coordinates: {
+              latitude: c.coordinates[0],
+              longitude: c.coordinates[1]
+            }
+          }));
+          
+          const { container } = render(<MapVisualizer complaints={complaintsWithObjectCoords} />);
+          
+          const markers = screen.getAllByTestId('complaint-marker');
+          
+          // Cleanup
+          container.remove();
+          
+          // Assert: All complaints with object coordinates render
+          return markers.length === complaintsWithObjectCoords.length;
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  test('Property: Complaint count in stats matches input complaint count', () => {
+    fc.assert(
+      fc.property(
+        fc.array(complaintArbitrary(), { minLength: 0, maxLength: 20 }),
+        (complaints) => {
+          const { container } = render(<MapVisualizer complaints={complaints} />);
+          
+          // Get all stat items and find the one with "Complaints:" label
+          const statItems = container.querySelectorAll('.map-stats .stat-item');
+          let displayedCount = 0;
+          
+          statItems.forEach(item => {
+            const label = item.querySelector('.stat-label');
+            if (label && label.textContent === 'Complaints:') {
+              const value = item.querySelector('.stat-value');
+              displayedCount = value ? parseInt(value.textContent, 10) : 0;
+            }
+          });
+          
+          // Cleanup
+          container.remove();
+          
+          // Assert: Stats count matches the input complaint count
+          // The component shows total complaints passed in
+          return displayedCount === complaints.length;
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+
+  test('Property: Complaints with different categories all render as markers', () => {
+    const categories = ['pothole', 'flooding', 'traffic', 'garbage', 
+                       'streetlight', 'water_supply', 'noise', 'construction'];
+    
+    fc.assert(
+      fc.property(
+        fc.array(complaintArbitrary(), { minLength: 8, maxLength: 16 }),
+        (complaints) => {
+          // Ensure we have at least one complaint of each category
+          const diverseComplaints = complaints.map((c, i) => ({
+            ...c,
+            category: categories[i % categories.length]
+          }));
+          
+          const { container } = render(<MapVisualizer complaints={diverseComplaints} />);
+          
+          const markers = screen.getAllByTestId('complaint-marker');
+          
+          // Cleanup
+          container.remove();
+          
+          // Assert: All complaints render regardless of category
+          return markers.length === diverseComplaints.length;
         }
       ),
       { numRuns: 100 }

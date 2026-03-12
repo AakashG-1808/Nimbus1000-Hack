@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { complaintsAPI, riskAPI, weatherAPI, trafficAPI } from '../services/api';
 import MapVisualizer from './MapVisualizer';
+import ComplaintFeed from './ComplaintFeed';
+import TrendCharts from './TrendCharts';
+import WeatherPanel from './WeatherPanel';
+import TrafficPanel from './TrafficPanel';
 import './Dashboard.css';
 
 /**
@@ -106,16 +110,10 @@ const Dashboard = () => {
         <section className="dashboard-section feed-section">
           <div className="section-header">
             <h2>Recent Complaints</h2>
-            <span className="section-badge">{complaints.length}</span>
+            <span className="section-badge">{Math.min(20, complaints.length)}</span>
           </div>
           <div className="section-content">
-            {/* ComplaintFeed component will be added in task 16.1 */}
-            <div className="placeholder-content">
-              <p>Complaint Feed</p>
-              <p className="placeholder-detail">
-                Showing {Math.min(20, complaints.length)} most recent
-              </p>
-            </div>
+            <ComplaintFeed complaints={complaints} />
           </div>
         </section>
 
@@ -125,15 +123,8 @@ const Dashboard = () => {
             <h2>Weather Conditions</h2>
           </div>
           <div className="section-content">
-            {/* WeatherPanel component will be added in task 18.1 */}
-            <div className="placeholder-content">
-              <p>Weather Panel</p>
-              {weather && (
-                <p className="placeholder-detail">
-                  {weather.temperature_celsius}°C • {weather.humidity_percent}% humidity
-                </p>
-              )}
-            </div>
+            {/* WeatherPanel component - Task 18.1 */}
+            <WeatherPanel weather={weather} />
           </div>
         </section>
 
@@ -144,13 +135,8 @@ const Dashboard = () => {
             <span className="section-badge">{traffic.length} locations</span>
           </div>
           <div className="section-content">
-            {/* TrafficPanel component will be added in task 19.1 */}
-            <div className="placeholder-content">
-              <p>Traffic Panel</p>
-              <p className="placeholder-detail">
-                Monitoring {traffic.length} key locations
-              </p>
-            </div>
+            {/* TrafficPanel component - Task 19.1 */}
+            <TrafficPanel trafficData={traffic} />
           </div>
         </section>
 
@@ -160,13 +146,8 @@ const Dashboard = () => {
             <h2>Trend Analysis</h2>
           </div>
           <div className="section-content">
-            {/* TrendCharts component will be added in task 17.1 */}
-            <div className="placeholder-content">
-              <p>Trend Charts</p>
-              <p className="placeholder-detail">
-                7-day complaint trends • Risk zone analysis
-              </p>
-            </div>
+            {/* TrendCharts component - Task 17.1 */}
+            <TrendCharts complaints={complaints} riskZones={riskZones} />
           </div>
         </section>
       </div>

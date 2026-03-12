@@ -177,6 +177,38 @@
   line-height: 1.5;
 }
 
+/* Complaint Popup Styles */
+.complaint-popup {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  min-width: 220px;
+  max-width: 300px;
+}
+
+.complaint-popup h3 {
+  color: #1f2937;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 4px;
+}
+
+.complaint-popup div {
+  color: #374151;
+  line-height: 1.5;
+}
+
+/* Complaint Marker Icon */
+.complaint-marker-icon {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.complaint-marker-icon:hover {
+  transform: scale(1.1);
+}
+
 /* Leaflet popup customization */
 .map-visualizer .leaflet-popup-content-wrapper {
   border-radius: 8px;

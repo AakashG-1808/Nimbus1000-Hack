@@ -239,3 +239,19 @@ class ComplaintProcessor:
             - < 200ms for up to 1000 complaints
         """
         return storage.get_all_complaints()
+
+
+# Singleton instance
+_complaint_processor_instance = None
+
+def get_complaint_processor() -> ComplaintProcessor:
+    """
+    Returns singleton instance of ComplaintProcessor.
+    
+    Returns:
+        ComplaintProcessor instance
+    """
+    global _complaint_processor_instance
+    if _complaint_processor_instance is None:
+        _complaint_processor_instance = ComplaintProcessor()
+    return _complaint_processor_instance

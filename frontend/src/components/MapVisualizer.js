@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Circle, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './MapVisualizer.css';
 
@@ -71,6 +72,62 @@ const getRiskLevelLabel = (riskScore) => {
     return 'High Risk';
   }
   return 'Unknown';
+};
+
+/**
+ * Create custom marker icon for complaint categories
+ * Different colors for different complaint types
+ * 
+ * Validates: Requirements 11.4
+ */
+const createComplaintIcon = (category) => {
+  // Color mapping for different complaint categories
+  const categoryColors = {
+    pothole: '#8b5cf6',      // Purple
+    flooding: '#3b82f6',     // Blue
+    traffic: '#f59e0b',      // Amber
+    garbage: '#84cc16',      // Lime
+    streetlight: '#fbbf24',  // Yellow
+    water_supply: '#06b6d4', // Cyan
+    noise: '#ec4899',        // Pink
+    construction: '#f97316', // Orange
+  };
+
+  const color = categoryColors[category] || '#6b7280'; // Gray default
+
+  // Create SVG marker icon
+  const svgIcon = `
+    <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="12" fill="${color}" stroke="white" stroke-width="2" opacity="0.9"/>
+      <circle cx="16" cy="16" r="4" fill="white"/>
+    </svg>
+  `;
+
+  return L.divIcon({
+    html: svgIcon,
+    className: 'complaint-marker-icon',
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -16],
+  });
+};
+
+/**
+ * Format timestamp for display
+ */
+const formatTimestamp = (timestamp) => {
+  try {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch (error) {
+    return timestamp;
+  }
 };
 
 /**
@@ -182,7 +239,68 @@ const MapVisualizer = ({ riskZones = [], complaints = [], updateInterval = 30000
           );
         })}
         
-        {/* Complaint markers will be added in subsequent tasks */}
+        {/* Complaint Markers - Display individual complaints with category-specific icons */}
+        {/* Validates: Requirements 11.4, 11.5 */}
+        {complaints.map((complaint) => {
+          // Extract coordinates from complaint data
+          const coords = complaint.coordinates;
+          if (!coords || (!coords.latitude && !coords[0])) {
+            console.warn('Invalid complaint coordinates:', complaint);
+            return null;
+          }
+
+          // Handle both object format {latitude, longitude} and array format [lat, lon]
+          const lat = coords.latitude || coords[0];
+          const lon = coords.longitude || coords[1];
+
+          if (typeof lat !== 'number' || typeof lon !== 'number') {
+            console.warn('Invalid coordinate values:', complaint);
+            return null;
+          }
+
+          const icon = createComplaintIcon(complaint.category);
+
+          return (
+            <Marker
+              key={complaint.complaint_id}
+              position={[lat, lon]}
+              icon={icon}
+              eventHandlers={{
+                click: () => {
+                  console.log('Complaint marker clicked:', complaint);
+                },
+              }}
+            >
+              <Popup>
+                <div className="complaint-popup">
+                  <h3 style={{ 
+                    margin: '0 0 8px 0', 
+                    fontSize: '16px', 
+                    fontWeight: '600',
+                    textTransform: 'capitalize'
+                  }}>
+                    {complaint.category.replace('_', ' ')}
+                  </h3>
+                  <div style={{ marginBottom: '4px' }}>
+                    <strong>Location:</strong> {complaint.location}
+                  </div>
+                  <div style={{ marginBottom: '4px' }}>
+                    <strong>Description:</strong>
+                    <p style={{ margin: '4px 0', fontSize: '14px', color: '#374151' }}>
+                      {complaint.description}
+                    </p>
+                  </div>
+                  <div style={{ marginBottom: '4px' }}>
+                    <strong>Reported:</strong> {formatTimestamp(complaint.timestamp)}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
+                    ID: {complaint.complaint_id.substring(0, 8)}...
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
       
       {/* Map Legend */}
