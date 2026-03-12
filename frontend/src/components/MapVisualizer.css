@@ -1,0 +1,192 @@
+/**
+ * MapVisualizer Component Styles
+ * 
+ * Responsive map container with legend and stats overlay
+ */
+
+.map-visualizer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #f3f4f6;
+}
+
+/* Leaflet map container */
+.map-visualizer .leaflet-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  z-index: 1;
+}
+
+/* Map Legend */
+.map-legend {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 180px;
+}
+
+.legend-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: #1f2937;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin: 6px 0;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.legend-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  margin-right: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Map Stats */
+.map-stats {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 150px;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+.stat-label {
+  color: #6b7280;
+  margin-right: 12px;
+}
+
+.stat-value {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+/* Leaflet control overrides */
+.map-visualizer .leaflet-control-zoom {
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.map-visualizer .leaflet-control-zoom a {
+  width: 36px;
+  height: 36px;
+  line-height: 36px;
+  font-size: 18px;
+  border: none;
+  background-color: white;
+  color: #1f2937;
+}
+
+.map-visualizer .leaflet-control-zoom a:hover {
+  background-color: #f3f4f6;
+}
+
+/* Leaflet attribution */
+.map-visualizer .leaflet-control-attribution {
+  font-size: 11px;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 2px 6px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .map-visualizer {
+    min-height: 300px;
+  }
+  
+  .map-legend,
+  .map-stats {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  
+  .legend-title {
+    font-size: 13px;
+  }
+  
+  .legend-item,
+  .stat-item {
+    font-size: 12px;
+  }
+  
+  .legend-color {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .map-legend {
+    bottom: 10px;
+    left: 10px;
+    min-width: 140px;
+  }
+  
+  .map-stats {
+    top: 10px;
+    right: 10px;
+    min-width: 120px;
+  }
+}
+
+/* Risk Zone Popup Styles */
+.risk-zone-popup {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  min-width: 200px;
+}
+
+.risk-zone-popup h3 {
+  color: #1f2937;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 4px;
+}
+
+.risk-zone-popup div {
+  color: #374151;
+  line-height: 1.5;
+}
+
+/* Leaflet popup customization */
+.map-visualizer .leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.map-visualizer .leaflet-popup-content {
+  margin: 12px 16px;
+}
+
+.map-visualizer .leaflet-popup-tip {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}

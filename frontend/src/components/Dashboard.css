@@ -1,0 +1,248 @@
+/* Dashboard Container */
+.dashboard {
+  width: 100%;
+  min-height: 100vh;
+  background-color: #f5f7fa;
+  padding: 20px;
+}
+
+/* Dashboard Header */
+.dashboard-header {
+  margin-bottom: 24px;
+}
+
+.dashboard-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1a202c;
+  margin: 0 0 8px 0;
+}
+
+.last-update {
+  font-size: 14px;
+  color: #718096;
+  margin-top: 4px;
+}
+
+.error-banner {
+  background-color: #fed7d7;
+  color: #c53030;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+/* Dashboard Grid Layout */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: auto auto auto;
+  gap: 20px;
+  width: 100%;
+}
+
+/* Grid Area Assignments */
+.map-section {
+  grid-column: 1 / 9;
+  grid-row: 1 / 3;
+  min-height: 600px;
+}
+
+.feed-section {
+  grid-column: 9 / 13;
+  grid-row: 1 / 3;
+  min-height: 600px;
+}
+
+.weather-section {
+  grid-column: 1 / 4;
+  grid-row: 3;
+  min-height: 200px;
+}
+
+.traffic-section {
+  grid-column: 4 / 7;
+  grid-row: 3;
+  min-height: 200px;
+}
+
+.charts-section {
+  grid-column: 7 / 13;
+  grid-row: 3;
+  min-height: 200px;
+}
+
+/* Dashboard Section Styling */
+.dashboard-section {
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f8fafc;
+}
+
+.section-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2d3748;
+  margin: 0;
+}
+
+.section-badge {
+  background-color: #edf2f7;
+  color: #4a5568;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.section-content {
+  flex: 1;
+  padding: 20px;
+  overflow: auto;
+}
+
+/* Map section needs no padding for full-width map */
+.map-section .section-content {
+  padding: 0;
+}
+
+/* Placeholder Content (for sections not yet implemented) */
+.placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #a0aec0;
+  text-align: center;
+}
+
+.placeholder-content p {
+  margin: 8px 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.placeholder-detail {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: #cbd5e0 !important;
+}
+
+/* Loading State */
+.dashboard-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: #f5f7fa;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #3182ce;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dashboard-loading p {
+  margin-top: 16px;
+  color: #718096;
+  font-size: 16px;
+}
+
+/* Responsive Design */
+@media (max-width: 1400px) {
+  .map-section {
+    grid-column: 1 / 8;
+  }
+  
+  .feed-section {
+    grid-column: 8 / 13;
+  }
+}
+
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  
+  .map-section {
+    grid-column: 1 / 7;
+    grid-row: 1;
+    min-height: 500px;
+  }
+  
+  .feed-section {
+    grid-column: 1 / 7;
+    grid-row: 2;
+    min-height: 400px;
+  }
+  
+  .weather-section {
+    grid-column: 1 / 4;
+    grid-row: 3;
+  }
+  
+  .traffic-section {
+    grid-column: 4 / 7;
+    grid-row: 3;
+  }
+  
+  .charts-section {
+    grid-column: 1 / 7;
+    grid-row: 4;
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard {
+    padding: 12px;
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .map-section,
+  .feed-section,
+  .weather-section,
+  .traffic-section,
+  .charts-section {
+    grid-column: 1;
+    grid-row: auto;
+    min-height: 300px;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 24px;
+  }
+  
+  .section-header h2 {
+    font-size: 16px;
+  }
+}

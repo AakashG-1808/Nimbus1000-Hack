@@ -1,0 +1,4 @@
+# file: C:\Hackathon\backend\error_handling.py
+# hypothesis_version: 6.151.9
+
+[1.0, 2.0, 400, 404, 500, 503, 'API', 'Database Error', 'ExternalAPI', 'INFO', 'Not Found', 'Validation Error', 'Z', 'client_ip', 'component', 'context', 'error', 'error_details', 'error_message', 'error_type', 'field', 'level', 'message', 'method', 'path', 'response_time_ms', 'service', 'status_code', 'timestamp', 'traceback']

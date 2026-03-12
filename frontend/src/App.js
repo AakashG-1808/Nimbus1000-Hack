@@ -1,14 +1,19 @@
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Dashboard from './components/Dashboard';
 import './App.css';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>UrbanGuard AI System</h1>
-        <p>Urban Infrastructure Risk Prediction Platform</p>
-      </header>
-    </div>
+    <Router>
+      <div className="App">
+        <main>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
   );
 }
 
