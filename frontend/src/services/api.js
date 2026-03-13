@@ -48,7 +48,12 @@ export const complaintsAPI = {
     return api.post('/report-complaint', complaintData);
   },
 
-  // Get all complaints
+  // Get complaints with optional filters
+  getComplaints: (params = {}) => {
+    return api.get('/complaints', { params });
+  },
+
+  // Get all complaints (legacy helper)
   getAllComplaints: () => {
     return api.get('/complaints');
   },

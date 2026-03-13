@@ -34,7 +34,7 @@ ChartJS.register(
  * 
  * Validates: Requirements 14.1, 14.2, 14.3, 14.4
  */
-const TrendCharts = ({ complaints, riskZones }) => {
+const TrendCharts = ({ complaints, riskZones, loading = false }) => {
   // Process complaint data for 7-day trend
   const complaintVolumeData = useMemo(() => {
     if (!complaints || complaints.length === 0) {
@@ -301,7 +301,9 @@ const TrendCharts = ({ complaints, riskZones }) => {
     <div className="trend-charts">
       {/* Complaint Volume Chart */}
       <div className="chart-container">
-        {complaintVolumeData ? (
+        {loading ? (
+          <div className="chart-skeleton"></div>
+        ) : complaintVolumeData ? (
           <Line data={complaintVolumeData} options={complaintVolumeOptions} />
         ) : (
           <div className="chart-placeholder">
@@ -312,7 +314,9 @@ const TrendCharts = ({ complaints, riskZones }) => {
 
       {/* Risk Score Trend Chart */}
       <div className="chart-container">
-        {riskScoreTrendData ? (
+        {loading ? (
+          <div className="chart-skeleton"></div>
+        ) : riskScoreTrendData ? (
           <Line data={riskScoreTrendData} options={riskScoreTrendOptions} />
         ) : (
           <div className="chart-placeholder">

@@ -125,6 +125,10 @@ OPENWEATHERMAP_API_KEY=your_api_key_here
 AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
 AWS_DEFAULT_REGION=us-east-1
+
+# CORS configuration (optional)
+# Comma-separated list of allowed origins or "*"
+CORS_ALLOW_ORIGINS=http://localhost:3000
 ```
 
 **Note**: The system works perfectly without these API keys using fallback mechanisms.
@@ -258,8 +262,8 @@ You can now view urbanguard-frontend in the browser.
 - **Check**: Network tab shows successful API calls
 
 **Problem**: CORS errors in browser console
-- **Solution**: Ensure backend CORS is configured for http://localhost:3000
-- **Check**: `main.py` has correct CORS origins
+- **Solution**: Set `CORS_ALLOW_ORIGINS` to include the frontend origin
+- **Example**: `CORS_ALLOW_ORIGINS=http://localhost:3000`
 
 **Problem**: Blank page or white screen
 - **Check**: Browser console for JavaScript errors

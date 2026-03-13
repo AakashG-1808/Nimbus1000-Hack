@@ -15,7 +15,7 @@ import './ComplaintForm.css';
  * 
  * Validates: Requirements 1.1, 12.2
  */
-const ComplaintForm = ({ onSubmitSuccess }) => {
+const ComplaintForm = ({ onSubmitStart, onSubmitSuccess, onSubmitError }) => {
   // Form state
   const [formData, setFormData] = useState({
     location: '',
@@ -27,6 +27,8 @@ const ComplaintForm = ({ onSubmitSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState(null); // 'success' or 'error'
+  const [lastPayload, setLastPayload] = useState(null);
+  const [showRetry, setShowRetry] = useState(false);
 
   // Bengaluru locations (40+ locations)
   const locations = [
@@ -66,6 +68,7 @@ const ComplaintForm = ({ onSubmitSuccess }) => {
     if (message) {
       setMessage(null);
       setMessageType(null);
+      setShowRetry(false);
     }
   };
 
@@ -95,54 +98,41 @@ const ComplaintForm = ({ onSubmitSuccess }) => {
   };
 
   // Handle form submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    // Validate form
-    if (!validateForm()) {
-      return;
-    }
-
+  const submitComplaint = async (complaintData) => {
     setIsSubmitting(true);
     setMessage(null);
     setMessageType(null);
+    setShowRetry(false);
+
+    if (onSubmitStart) {
+      onSubmitStart();
+    }
 
     try {
-      // Submit complaint to backend
-      const complaintData = {
-        location: formData.location,
-        category: formData.category,
-        description: formData.description.trim(),
-        timestamp: new Date().toISOString(),
-      };
-
-      const response = await complaintsAPI.submitComplaint(complaintData);
+      await complaintsAPI.submitComplaint(complaintData);
 
       // Show success message
       setMessage('Complaint submitted successfully!');
       setMessageType('success');
+      setShowRetry(false);
 
-      // Reset form
+      // Reset form only for non-retry submissions
       setFormData({
         location: '',
         category: '',
         description: '',
       });
 
-      // Trigger dashboard refresh if callback provided
       if (onSubmitSuccess) {
-        // Wait a moment to ensure backend has processed the complaint
         setTimeout(() => {
           onSubmitSuccess();
-        }, 1000);
+        }, 800);
       }
-
     } catch (error) {
       console.error('Error submitting complaint:', error);
-      
-      // Show error message
+
       let errorMessage = 'Failed to submit complaint. Please try again.';
-      
+
       if (error.response?.data?.detail) {
         errorMessage = error.response.data.detail;
       } else if (error.response?.data?.message) {
@@ -153,9 +143,40 @@ const ComplaintForm = ({ onSubmitSuccess }) => {
 
       setMessage(errorMessage);
       setMessageType('error');
+      setShowRetry(true);
+      setLastPayload(complaintData);
+
+      if (onSubmitError) {
+        onSubmitError(errorMessage);
+      }
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
+
+    const complaintData = {
+      location: formData.location,
+      category: formData.category,
+      description: formData.description.trim(),
+      timestamp: new Date().toISOString(),
+    };
+
+    setLastPayload(complaintData);
+    await submitComplaint(complaintData);
+  };
+
+  const handleRetry = async () => {
+    if (!lastPayload) {
+      return;
+    }
+    await submitComplaint(lastPayload);
   };
 
   return (
@@ -233,8 +254,17 @@ const ComplaintForm = ({ onSubmitSuccess }) => {
         {/* Message display */}
         {message && (
           <div className={`form-message ${messageType}`}>
-            {messageType === 'success' ? '✓ ' : '✗ '}
-            {message}
+            <span>{messageType === 'success' ? '✓ ' : '✗ '}{message}</span>
+            {showRetry && (
+              <button
+                type="button"
+                className="retry-button"
+                onClick={handleRetry}
+                disabled={isSubmitting}
+              >
+                Retry
+              </button>
+            )}
           </div>
         )}
 

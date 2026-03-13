@@ -3,10 +3,15 @@ UrbanGuard AI System - FastAPI Backend
 Main application entry point
 """
 import time
+import os
+from datetime import datetime
+from typing import Optional
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, field_validator
+from dotenv import load_dotenv
 from storage import storage
 from simulated_data import initialize_storage_with_simulated_data
 from weather_integrator import get_weather_integrator
@@ -14,10 +19,65 @@ from traffic_analyzer import get_traffic_analyzer
 from cluster_detector import get_cluster_detector
 from risk_engine import get_risk_engine
 from error_handling import RequestLogger, ErrorResponse, log_error
+from constants import BENGALURU_LOCATIONS, COMPLAINT_CATEGORIES
+
+
+load_dotenv()
 
 
 # Initialize request logger
 request_logger = RequestLogger(component="API")
+
+
+class ComplaintSubmission(BaseModel):
+    """Request body for complaint submission."""
+    location: str = Field(..., min_length=1, description="Bengaluru location name")
+    category: str = Field(..., min_length=1, description="Complaint category")
+    description: str = Field(..., min_length=1, description="Complaint description")
+    timestamp: Optional[datetime] = Field(default=None, description="ISO 8601 timestamp")
+
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("Description cannot be empty")
+        return value
+
+
+class ComplaintSubmissionResponse(BaseModel):
+    """Response payload for complaint submission."""
+    success: bool = Field(..., description="Submission status")
+    complaint_id: str = Field(..., description="Created complaint ID")
+    message: str = Field(..., description="Result message")
+
+
+class ComplaintCoordinates(BaseModel):
+    """Latitude/longitude coordinates for complaint location."""
+    latitude: float = Field(..., description="Latitude")
+    longitude: float = Field(..., description="Longitude")
+
+
+class ComplaintResponse(BaseModel):
+    """Complaint response payload returned by /complaints."""
+    complaint_id: str = Field(..., description="Complaint ID")
+    location: str = Field(..., description="Bengaluru location name")
+    category: str = Field(..., description="Complaint category")
+    description: str = Field(..., description="Complaint description")
+    timestamp: str = Field(..., description="ISO 8601 timestamp")
+    coordinates: ComplaintCoordinates
+    classification_confidence: float = Field(..., description="Classification confidence")
+
+
+def get_cors_origins() -> list[str]:
+    """Read allowed CORS origins from environment settings."""
+    raw_origins = os.getenv("CORS_ALLOW_ORIGINS")
+    if not raw_origins:
+        return ["http://localhost:3000"]
+
+    if raw_origins.strip() == "*":
+        return ["*"]
+
+    return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
 
 
 @asynccontextmanager
@@ -75,7 +135,7 @@ app = FastAPI(
 # CORS configuration for frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -239,8 +299,15 @@ async def get_traffic():
     ]
 
 
-@app.post("/report-complaint")
-async def report_complaint(complaint_data: dict):
+@app.post(
+    "/report-complaint",
+    response_model=ComplaintSubmissionResponse,
+    responses={
+        400: {"description": "Validation error"},
+        422: {"description": "Request body validation error"}
+    }
+)
+async def report_complaint(complaint_data: ComplaintSubmission):
     """
     Submit a new complaint
     
@@ -265,39 +332,15 @@ async def report_complaint(complaint_data: dict):
         
     Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 17.1, 17.7, 20.5
     """
-    from datetime import datetime
     from fastapi import HTTPException
     from complaint_processor import get_complaint_processor
-    from error_handling import validate_required_fields, ErrorResponse
     
     try:
-        # Validate required fields
-        required_fields = ["location", "category", "description"]
-        validation_error = validate_required_fields(complaint_data, required_fields)
-        
-        if validation_error:
-            raise HTTPException(
-                status_code=400,
-                detail=validation_error
-            )
-        
         # Extract fields
-        location = complaint_data.get("location")
-        category = complaint_data.get("category")
-        description = complaint_data.get("description")
-        timestamp_str = complaint_data.get("timestamp")
-        
-        # Parse timestamp
-        if timestamp_str:
-            try:
-                timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid timestamp format: {str(e)}"
-                )
-        else:
-            timestamp = datetime.now()
+        location = complaint_data.location
+        category = complaint_data.category
+        description = complaint_data.description
+        timestamp = complaint_data.timestamp or datetime.now()
         
         # Submit complaint
         complaint_processor = get_complaint_processor()
@@ -328,8 +371,21 @@ async def report_complaint(complaint_data: dict):
         raise HTTPException(status_code=500, detail="Failed to submit complaint")
 
 
-@app.get("/complaints")
-async def get_complaints():
+@app.get(
+    "/complaints",
+    response_model=list[ComplaintResponse],
+    responses={
+        400: {"description": "Invalid filter or time range"}
+    }
+)
+async def get_complaints(
+    location: Optional[str] = Query(default=None, description="Filter by Bengaluru location"),
+    category: Optional[str] = Query(default=None, description="Filter by complaint category"),
+    since: Optional[datetime] = Query(default=None, description="Filter complaints since this timestamp"),
+    until: Optional[datetime] = Query(default=None, description="Filter complaints until this timestamp"),
+    offset: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: Optional[int] = Query(default=None, ge=1, le=1000, description="Maximum number of records to return")
+):
     """
     Get all complaints sorted by timestamp descending
     
@@ -343,8 +399,24 @@ async def get_complaints():
     """
     from complaint_processor import get_complaint_processor
     
+    if location and location not in BENGALURU_LOCATIONS:
+        raise HTTPException(status_code=400, detail=f"Invalid location: {location}")
+
+    if category and category not in COMPLAINT_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"Invalid category: {category}")
+
+    if since and until and since > until:
+        raise HTTPException(status_code=400, detail="Invalid time range: since is after until")
+
     complaint_processor = get_complaint_processor()
-    complaints = complaint_processor.get_all_complaints()
+    complaints = complaint_processor.get_filtered_complaints(
+        location=location,
+        category=category,
+        since=since,
+        until=until,
+        offset=offset,
+        limit=limit
+    )
     
     return [
         {

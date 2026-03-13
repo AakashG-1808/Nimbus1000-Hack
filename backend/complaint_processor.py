@@ -4,7 +4,7 @@ Validates and stores citizen complaints
 """
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from uuid import uuid4
 from models import Complaint
 from constants import BENGALURU_LOCATIONS, COMPLAINT_CATEGORIES
@@ -239,6 +239,74 @@ class ComplaintProcessor:
             - < 200ms for up to 1000 complaints
         """
         return storage.get_all_complaints()
+
+    def _normalize_timestamp(self, timestamp: datetime) -> datetime:
+        """
+        Normalize timestamps so naive and aware datetimes can be compared safely.
+
+        Args:
+            timestamp: Timestamp to normalize
+
+        Returns:
+            Naive datetime for comparison
+        """
+        if hasattr(timestamp, "tzinfo") and timestamp.tzinfo is not None:
+            return timestamp.replace(tzinfo=None)
+        return timestamp
+
+    def get_filtered_complaints(
+        self,
+        location: Optional[str] = None,
+        category: Optional[str] = None,
+        since: Optional[datetime] = None,
+        until: Optional[datetime] = None,
+        offset: int = 0,
+        limit: Optional[int] = None
+    ) -> List[Complaint]:
+        """
+        Retrieve complaints with optional filters and pagination.
+
+        Args:
+            location: Optional location filter
+            category: Optional category filter
+            since: Optional start timestamp (inclusive)
+            until: Optional end timestamp (inclusive)
+            offset: Number of records to skip
+            limit: Maximum number of records to return
+
+        Returns:
+            Filtered, sorted list of complaints
+        """
+        complaints = storage.get_all_complaints()
+
+        if location:
+            complaints = [c for c in complaints if c.location == location]
+
+        if category:
+            complaints = [c for c in complaints if c.category == category]
+
+        if since or until:
+            normalized_since = self._normalize_timestamp(since) if since else None
+            normalized_until = self._normalize_timestamp(until) if until else None
+
+            filtered_complaints = []
+            for complaint in complaints:
+                complaint_ts = self._normalize_timestamp(complaint.timestamp)
+                if normalized_since and complaint_ts < normalized_since:
+                    continue
+                if normalized_until and complaint_ts > normalized_until:
+                    continue
+                filtered_complaints.append(complaint)
+
+            complaints = filtered_complaints
+
+        if offset > 0:
+            complaints = complaints[offset:]
+
+        if limit is not None:
+            complaints = complaints[:limit]
+
+        return complaints
 
 
 # Singleton instance

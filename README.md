@@ -94,6 +94,7 @@ pip install -r requirements.txt
 # OPENWEATHERMAP_API_KEY=your_key_here
 # AWS_ACCESS_KEY_ID=your_key_here
 # AWS_SECRET_ACCESS_KEY=your_key_here
+# CORS_ALLOW_ORIGINS=http://localhost:3000
 ```
 
 ### 3. Frontend Setup
@@ -177,7 +178,7 @@ npm test -- --testNamePattern="Property"
 
 ### Complaints
 - `POST /report-complaint` - Submit a new complaint
-- `GET /complaints` - Get all complaints (sorted by timestamp)
+- `GET /complaints` - Get complaints (sorted by timestamp), supports `location`, `category`, `since`, `until`, `offset`, `limit`
 
 ### Risk & Analysis
 - `GET /risk-hotspots` - Get risk zones (score > 20)
@@ -218,7 +219,7 @@ npm test -- --testNamePattern="Property"
 
 ### Backend Configuration
 - Port: 8000 (configurable in `main.py`)
-- CORS: Enabled for http://localhost:3000
+- CORS: Set `CORS_ALLOW_ORIGINS` (comma-separated or `*`), defaults to http://localhost:3000
 - Polling Intervals:
   - Risk calculation: 15 minutes
   - Weather updates: 30 minutes
@@ -287,7 +288,7 @@ urbanguard-ai-system/
 - **Solution**: Check browser console for errors. Ensure backend is running on port 8000
 
 **Issue**: CORS errors
-- **Solution**: Verify backend CORS configuration includes http://localhost:3000
+- **Solution**: Set `CORS_ALLOW_ORIGINS` to include the frontend origin (for example: http://localhost:3000)
 
 ## Contributing
 

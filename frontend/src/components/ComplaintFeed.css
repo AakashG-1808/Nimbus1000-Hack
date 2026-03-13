@@ -11,20 +11,72 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  gap: 8px;
   height: 100%;
   color: #666;
   font-style: italic;
 }
 
-.complaint-item {
+.complaint-feed-empty.error {
+  color: #b91c1c;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.stale-indicator {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.complaint-skeleton {
   padding: 16px;
   border-bottom: 1px solid #e0e0e0;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f3f4f6, #e5e7eb, #f3f4f6);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+.skeleton-badge {
+  width: 120px;
+  height: 16px;
+}
+
+.skeleton-line {
+  width: 100%;
+  height: 12px;
+}
+
+.skeleton-line.short {
+  width: 70%;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 0% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.complaint-item {
+  padding: 16px;
+  border-bottom: 1px solid var(--color-border);
   background: #fff;
   transition: background-color 0.2s ease;
 }
 
 .complaint-item:hover {
-  background-color: #f8f9fa;
+  background-color: #f8fafc;
 }
 
 .complaint-item:first-child {
@@ -50,7 +102,7 @@
 
 .complaint-timestamp {
   font-size: 12px;
-  color: #666;
+  color: var(--color-muted);
 }
 
 .complaint-location {
@@ -58,19 +110,19 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #444;
+  color: var(--color-ink);
   margin-bottom: 8px;
   font-weight: 500;
 }
 
 .location-icon {
   flex-shrink: 0;
-  color: #666;
+  color: var(--color-muted);
 }
 
 .complaint-description {
   font-size: 14px;
-  color: #333;
+  color: var(--color-ink);
   line-height: 1.5;
 }
 

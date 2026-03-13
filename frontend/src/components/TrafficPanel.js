@@ -10,7 +10,23 @@ import './TrafficPanel.css';
  * 
  * Validates: Requirements 16.1, 16.2, 16.3, 16.4
  */
-const TrafficPanel = ({ trafficData }) => {
+const TrafficPanel = ({ trafficData, loading = false, error = null, stale = false }) => {
+  if (loading && (!trafficData || trafficData.length === 0)) {
+    return (
+      <div className="traffic-panel">
+        <div className="traffic-skeleton"></div>
+      </div>
+    );
+  }
+
+  if (error && (!trafficData || trafficData.length === 0)) {
+    return (
+      <div className="traffic-panel">
+        <div className="traffic-error">{error}</div>
+      </div>
+    );
+  }
+
   // Check if traffic data is null, undefined, or empty
   if (!trafficData || trafficData.length === 0) {
     return (
@@ -71,6 +87,9 @@ const TrafficPanel = ({ trafficData }) => {
           </div>
         ))}
       </div>
+      {stale && (
+        <div className="traffic-stale">Showing stale data</div>
+      )}
     </div>
   );
 };

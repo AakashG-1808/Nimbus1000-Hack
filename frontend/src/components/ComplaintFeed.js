@@ -7,7 +7,7 @@ import './ComplaintFeed.css';
  * 
  * Validates: Requirements 13.1, 13.2, 13.3, 13.4
  */
-const ComplaintFeed = ({ complaints = [] }) => {
+const ComplaintFeed = ({ complaints = [], loading = false, error = null, stale = false }) => {
   const [displayedComplaints, setDisplayedComplaints] = useState([]);
   const [previousComplaintIds, setPreviousComplaintIds] = useState(new Set());
   const feedRef = useRef(null);
@@ -92,10 +92,33 @@ const ComplaintFeed = ({ complaints = [] }) => {
     }
   };
 
+  if (loading && displayedComplaints.length === 0) {
+    return (
+      <div className="complaint-feed">
+        {[...Array(6)].map((_, index) => (
+          <div key={index} className="complaint-skeleton">
+            <div className="skeleton skeleton-badge"></div>
+            <div className="skeleton skeleton-line"></div>
+            <div className="skeleton skeleton-line short"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error && displayedComplaints.length === 0) {
+    return (
+      <div className="complaint-feed-empty error">
+        <p>{error}</p>
+      </div>
+    );
+  }
+
   if (displayedComplaints.length === 0) {
     return (
       <div className="complaint-feed-empty">
         <p>No complaints to display</p>
+        {stale && <span className="stale-indicator">Showing stale data</span>}
       </div>
     );
   }

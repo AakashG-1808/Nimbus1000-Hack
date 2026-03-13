@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, Circle, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -24,6 +24,7 @@ const BENGALURU_CENTER = [12.9716, 77.5946];
 const DEFAULT_ZOOM = 12;
 const MIN_ZOOM = 10;
 const MAX_ZOOM = 18;
+const CLUSTER_GRID_SIZE = 0.003;
 
 /**
  * MapController component to handle map updates
@@ -112,6 +113,26 @@ const createComplaintIcon = (category) => {
   });
 };
 
+const createClusterIcon = (count) => {
+  const size = count >= 50 ? 48 : count >= 20 ? 42 : 36;
+  const fontSize = count >= 50 ? 14 : 12;
+  const html = `
+    <div class="cluster-marker" style="width:${size}px;height:${size}px;">
+      <div class="cluster-inner">
+        <span style="font-size:${fontSize}px;">${count}</span>
+      </div>
+    </div>
+  `;
+
+  return L.divIcon({
+    html,
+    className: 'cluster-marker-icon',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2]
+  });
+};
+
 /**
  * Format timestamp for display
  */
@@ -138,8 +159,76 @@ const formatTimestamp = (timestamp) => {
  * @param {Array} props.complaints - Array of complaint objects
  * @param {number} props.updateInterval - Update interval in milliseconds (default: 30000)
  */
-const MapVisualizer = ({ riskZones = [], complaints = [], updateInterval = 30000 }) => {
+const MapVisualizer = ({
+  riskZones = [],
+  complaints = [],
+  updateInterval = 30000,
+  loading = false,
+  error = null,
+  enableClustering = true
+}) => {
   const mapRef = useRef(null);
+
+  const normalizedComplaints = useMemo(() => {
+    return complaints
+      .map((complaint) => {
+        const coords = complaint.coordinates;
+        if (!coords || (!coords.latitude && !coords[0])) {
+          return null;
+        }
+        const lat = coords.latitude || coords[0];
+        const lon = coords.longitude || coords[1];
+        if (typeof lat !== 'number' || typeof lon !== 'number') {
+          return null;
+        }
+        return { ...complaint, _lat: lat, _lon: lon };
+      })
+      .filter(Boolean);
+  }, [complaints]);
+
+  const { clusters, singles } = useMemo(() => {
+    if (!enableClustering) {
+      return { clusters: [], singles: normalizedComplaints };
+    }
+
+    const clusterMap = new Map();
+    normalizedComplaints.forEach((complaint) => {
+      const latKey = Math.round(complaint._lat / CLUSTER_GRID_SIZE) * CLUSTER_GRID_SIZE;
+      const lonKey = Math.round(complaint._lon / CLUSTER_GRID_SIZE) * CLUSTER_GRID_SIZE;
+      const key = `${latKey.toFixed(4)}-${lonKey.toFixed(4)}`;
+      if (!clusterMap.has(key)) {
+        clusterMap.set(key, []);
+      }
+      clusterMap.get(key).push(complaint);
+    });
+
+    const clusterResults = [];
+    const singleResults = [];
+
+    clusterMap.forEach((items) => {
+      if (items.length <= 1) {
+        singleResults.push(...items);
+        return;
+      }
+
+      const latSum = items.reduce((acc, item) => acc + item._lat, 0);
+      const lonSum = items.reduce((acc, item) => acc + item._lon, 0);
+      const categories = items.reduce((acc, item) => {
+        acc[item.category] = (acc[item.category] || 0) + 1;
+        return acc;
+      }, {});
+
+      clusterResults.push({
+        lat: latSum / items.length,
+        lon: lonSum / items.length,
+        count: items.length,
+        categories,
+        items
+      });
+    });
+
+    return { clusters: clusterResults, singles: singleResults };
+  }, [normalizedComplaints, enableClustering]);
 
   // Log map initialization
   useEffect(() => {
@@ -161,6 +250,11 @@ const MapVisualizer = ({ riskZones = [], complaints = [], updateInterval = 30000
 
   return (
     <div className="map-visualizer">
+      {(loading || error) && (
+        <div className={`map-overlay ${error ? 'error' : ''}`}>
+          {error ? error : 'Loading map data...'}
+        </div>
+      )}
       <MapContainer
         center={BENGALURU_CENTER}
         zoom={DEFAULT_ZOOM}
@@ -241,29 +335,37 @@ const MapVisualizer = ({ riskZones = [], complaints = [], updateInterval = 30000
         
         {/* Complaint Markers - Display individual complaints with category-specific icons */}
         {/* Validates: Requirements 11.4, 11.5 */}
-        {complaints.map((complaint) => {
-          // Extract coordinates from complaint data
-          const coords = complaint.coordinates;
-          if (!coords || (!coords.latitude && !coords[0])) {
-            console.warn('Invalid complaint coordinates:', complaint);
-            return null;
-          }
+        {clusters.map((cluster) => (
+          <Marker
+            key={`cluster-${cluster.lat}-${cluster.lon}-${cluster.count}`}
+            position={[cluster.lat, cluster.lon]}
+            icon={createClusterIcon(cluster.count)}
+          >
+            <Popup>
+              <div className="complaint-popup">
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600' }}>
+                  {cluster.count} Complaints
+                </h3>
+                <div style={{ fontSize: '13px', marginBottom: '8px' }}>
+                  Clustered complaints within ~300m grid
+                </div>
+                {Object.keys(cluster.categories).map((category) => (
+                  <div key={category} style={{ fontSize: '13px', marginBottom: '4px' }}>
+                    <strong>{category.replace('_', ' ')}:</strong> {cluster.categories[category]}
+                  </div>
+                ))}
+              </div>
+            </Popup>
+          </Marker>
+        ))}
 
-          // Handle both object format {latitude, longitude} and array format [lat, lon]
-          const lat = coords.latitude || coords[0];
-          const lon = coords.longitude || coords[1];
-
-          if (typeof lat !== 'number' || typeof lon !== 'number') {
-            console.warn('Invalid coordinate values:', complaint);
-            return null;
-          }
-
+        {singles.map((complaint) => {
           const icon = createComplaintIcon(complaint.category);
 
           return (
             <Marker
               key={complaint.complaint_id}
-              position={[lat, lon]}
+              position={[complaint._lat, complaint._lon]}
               icon={icon}
               eventHandlers={{
                 click: () => {

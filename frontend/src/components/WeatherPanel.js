@@ -10,7 +10,23 @@ import './WeatherPanel.css';
  * 
  * Validates: Requirements 15.1, 15.2, 15.3, 15.4
  */
-const WeatherPanel = ({ weather }) => {
+const WeatherPanel = ({ weather, loading = false, error = null, stale = false }) => {
+  if (loading && !weather) {
+    return (
+      <div className="weather-panel">
+        <div className="weather-skeleton"></div>
+      </div>
+    );
+  }
+
+  if (error && !weather) {
+    return (
+      <div className="weather-panel">
+        <div className="weather-error">{error}</div>
+      </div>
+    );
+  }
+
   // Check if weather data is null, undefined, or missing required properties
   if (!weather || 
       weather.temperature_celsius === undefined || 
@@ -29,8 +45,11 @@ const WeatherPanel = ({ weather }) => {
     humidity_percent,
     precipitation_mm_per_hour,
     wind_speed_kmh,
-    high_rainfall
+    high_rainfall,
+    high_rainfall_flag
   } = weather;
+
+  const isHighRainfall = Boolean(high_rainfall || high_rainfall_flag);
 
   // Determine weather icon based on conditions
   const getWeatherIcon = () => {
@@ -42,7 +61,7 @@ const WeatherPanel = ({ weather }) => {
   };
 
   return (
-    <div className={`weather-panel ${high_rainfall ? 'high-rainfall' : ''}`}>
+    <div className={`weather-panel ${isHighRainfall ? 'high-rainfall' : ''}`}>
       <div className="weather-icon">
         {getWeatherIcon()}
       </div>
@@ -81,10 +100,14 @@ const WeatherPanel = ({ weather }) => {
         </div>
       </div>
 
-      {high_rainfall && (
+      {isHighRainfall && (
         <div className="weather-alert">
           ⚠️ High Rainfall Alert
         </div>
+      )}
+
+      {stale && (
+        <div className="weather-stale">Showing stale data</div>
       )}
     </div>
   );
