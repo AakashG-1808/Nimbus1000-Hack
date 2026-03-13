@@ -1,7 +1,9 @@
 """
-UrbanGuard AI System - In-Memory Data Storage
+UrbanGuard AI System - Data Storage
 Storage classes for complaints, risk zones, and reports
+Supports both in-memory (local dev) and DynamoDB (AWS Lambda) storage
 """
+import os
 from typing import List, Dict, Optional
 from datetime import datetime
 from models import Complaint, RiskZone, DailyReport
@@ -109,5 +111,33 @@ class InMemoryStorage:
             self._daily_reports.clear()
 
 
+def get_storage():
+    """
+    Get storage instance based on environment.
+    
+    Returns:
+        InMemoryStorage for local development
+        DynamoDBStorage for AWS Lambda deployment
+        
+    Environment Detection:
+        - AWS_EXECUTION_ENV: Set by Lambda runtime (e.g., "AWS_Lambda_python3.11")
+        - USE_DYNAMODB: Explicit flag to force DynamoDB usage
+        
+    Validates: Requirements 19.3, 19.4
+    """
+    # Check if running in AWS Lambda environment
+    is_lambda = os.environ.get("AWS_EXECUTION_ENV") is not None
+    use_dynamodb = os.environ.get("USE_DYNAMODB", "").lower() == "true"
+    
+    if is_lambda or use_dynamodb:
+        # Use DynamoDB storage for AWS Lambda deployment
+        from dynamodb_storage import DynamoDBStorage
+        return DynamoDBStorage()
+    else:
+        # Use in-memory storage for local development
+        return InMemoryStorage()
+
+
 # Global storage instance
-storage = InMemoryStorage()
+# Automatically selects InMemoryStorage or DynamoDBStorage based on environment
+storage = get_storage()

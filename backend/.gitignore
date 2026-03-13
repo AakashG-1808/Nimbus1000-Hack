@@ -27,3 +27,8 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+
+# AWS SAM
+.aws-sam/
+samconfig.toml.bak
+packaged.yaml

@@ -1,0 +1,460 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: UrbanGuard AI System - Serverless Deployment
+
+# ============================================================================
+# Global Configuration
+# ============================================================================
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.11
+    Environment:
+      Variables:
+        AWS_REGION: !Ref AWS::Region
+        DYNAMODB_TABLE_COMPLAINTS: !Ref ComplaintsTable
+        DYNAMODB_TABLE_RISK_ZONES: !Ref RiskZonesTable
+        DYNAMODB_TABLE_REPORTS: !Ref DailyReportsTable
+        OPENWEATHERMAP_API_KEY: !Ref OpenWeatherMapApiKey
+        AWS_BEDROCK_REGION: !Ref AWS::Region
+
+# ============================================================================
+# Parameters
+# ============================================================================
+Parameters:
+  OpenWeatherMapApiKey:
+    Type: String
+    Description: OpenWeatherMap API key for weather data integration
+    NoEcho: true
+    Default: ''
+  
+  Environment:
+    Type: String
+    Description: Deployment environment (dev, staging, prod)
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+# ============================================================================
+# Resources
+# ============================================================================
+Resources:
+  
+  # ==========================================================================
+  # Lambda Function
+  # ==========================================================================
+  UrbanGuardApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub urbanguard-api-${Environment}
+      Description: UrbanGuard AI System FastAPI backend
+      CodeUri: .
+      Handler: lambda_handler.lambda_handler
+      Architectures:
+        - x86_64
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ComplaintsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RiskZonesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DailyReportsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !GetAtt UrbanGuardLogGroup.Arn
+      Events:
+        # Root endpoint
+        RootApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /
+            Method: GET
+        
+        # Health check endpoint
+        HealthApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /health
+            Method: GET
+        
+        # Complaint submission endpoint
+        ReportComplaintApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /report-complaint
+            Method: POST
+        
+        # Get all complaints endpoint
+        GetComplaintsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /complaints
+            Method: GET
+        
+        # Get clusters endpoint
+        GetClustersApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /clusters
+            Method: GET
+        
+        # Get risk hotspots endpoint
+        GetRiskHotspotsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /risk-hotspots
+            Method: GET
+        
+        # Get daily report endpoint
+        GetDailyReportApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /daily-report
+            Method: GET
+        
+        # Get weather endpoint
+        GetWeatherApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /weather
+            Method: GET
+        
+        # Get traffic endpoint
+        GetTrafficApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /traffic
+            Method: GET
+        
+        # Get predictions endpoint
+        GetPredictionsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /predictions
+            Method: GET
+  
+  # ==========================================================================
+  # API Gateway
+  # ==========================================================================
+  UrbanGuardApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub urbanguard-api-${Environment}
+      StageName: !Ref Environment
+      Cors:
+        AllowOrigin: "'*'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowMethods: "'GET,POST,OPTIONS'"
+        MaxAge: "'600'"
+      DefinitionBody:
+        openapi: 3.0.1
+        info:
+          title: UrbanGuard AI System API
+          version: 1.0.0
+          description: Urban infrastructure risk prediction system API
+        paths:
+          /:
+            get:
+              summary: Root endpoint
+              responses:
+                '200':
+                  description: API information
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
+          /health:
+            get:
+              summary: Health check endpoint
+              responses:
+                '200':
+                  description: Health status
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
+          /report-complaint:
+            post:
+              summary: Submit a new complaint
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      required:
+                        - location
+                        - category
+                        - description
+                      properties:
+                        location:
+                          type: string
+                        category:
+                          type: string
+                        description:
+                          type: string
+                        timestamp:
+                          type: string
+                          format: date-time
+              responses:
+                '200':
+                  description: Complaint submitted successfully
+                '400':
+                  description: Invalid input
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
+          /complaints:
+            get:
+              summary: Get all complaints
+              responses:
+                '200':
+                  description: List of complaints
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
+          /clusters:
+            get:
+              summary: Get complaint clusters
+              responses:
+                '200':
+                  description: List of clusters
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
+          /risk-hotspots:
+            get:
+              summary: Get risk hotspots
+              responses:
+                '200':
+                  description: List of risk zones
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
+          /daily-report:
+            get:
+              summary: Get latest daily report
+              responses:
+                '200':
+                  description: Daily report
+                '404':
+                  description: No reports available
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
+          /weather:
+            get:
+              summary: Get current weather data
+              responses:
+                '200':
+                  description: Weather data
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
+          /traffic:
+            get:
+              summary: Get traffic congestion data
+              responses:
+                '200':
+                  description: Traffic data
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
+          /predictions:
+            get:
+              summary: Get incident predictions
+              responses:
+                '200':
+                  description: List of predictions
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
+        Format: '$context.requestId $context.extendedRequestId $context.identity.sourceIp $context.requestTime $context.httpMethod $context.routeKey $context.status $context.protocol $context.responseLength'
+  
+  # ==========================================================================
+  # DynamoDB Tables
+  # ==========================================================================
+  
+  # Complaints Table
+  ComplaintsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub urbanguard-complaints-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: complaint_id
+          AttributeType: S
+        - AttributeName: category
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: complaint_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: timestamp-index
+          KeySchema:
+            - AttributeName: category
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: UrbanGuard
+  
+  # Risk Zones Table
+  RiskZonesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub urbanguard-risk-zones-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: zone_id
+          AttributeType: S
+        - AttributeName: risk_level
+          AttributeType: S
+        - AttributeName: risk_score
+          AttributeType: N
+      KeySchema:
+        - AttributeName: zone_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: risk-score-index
+          KeySchema:
+            - AttributeName: risk_level
+              KeyType: HASH
+            - AttributeName: risk_score
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: UrbanGuard
+  
+  # Daily Reports Table
+  DailyReportsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub urbanguard-reports-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: report_id
+          AttributeType: S
+        - AttributeName: date
+          AttributeType: N
+      KeySchema:
+        - AttributeName: report_id
+          KeyType: HASH
+        - AttributeName: date
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: UrbanGuard
+  
+  # ==========================================================================
+  # CloudWatch Log Groups
+  # ==========================================================================
+  
+  # Lambda Function Logs
+  UrbanGuardLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/urbanguard-api-${Environment}
+      RetentionInDays: 30
+  
+  # API Gateway Logs
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/urbanguard-api-${Environment}
+      RetentionInDays: 30
+
+# ============================================================================
+# Outputs
+# ============================================================================
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${UrbanGuardApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiUrl
+  
+  LambdaFunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt UrbanGuardApiFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-LambdaFunctionArn
+  
+  ComplaintsTableName:
+    Description: DynamoDB Complaints table name
+    Value: !Ref ComplaintsTable
+    Export:
+      Name: !Sub ${AWS::StackName}-ComplaintsTable
+  
+  RiskZonesTableName:
+    Description: DynamoDB Risk Zones table name
+    Value: !Ref RiskZonesTable
+    Export:
+      Name: !Sub ${AWS::StackName}-RiskZonesTable
+  
+  DailyReportsTableName:
+    Description: DynamoDB Daily Reports table name
+    Value: !Ref DailyReportsTable
+    Export:
+      Name: !Sub ${AWS::StackName}-DailyReportsTable
+  
+  ApiGatewayId:
+    Description: API Gateway ID
+    Value: !Ref UrbanGuardApi
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiGatewayId

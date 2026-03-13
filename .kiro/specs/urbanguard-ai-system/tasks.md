@@ -421,21 +421,21 @@ The implementation follows an incremental approach: project setup → backend co
     - _Requirements: 1.4, 1.5, 3.3, 5.4, 6.4, 8.4, 10.4, 12.4_
 
 - [ ] 22. AWS deployment preparation
-  - [ ] 22.1 Configure AWS Lambda compatibility
+  - [x] 22.1 Configure AWS Lambda compatibility
     - Add Lambda handler wrapper for FastAPI
     - Configure environment variables for AWS services
     - Add DynamoDB client code (with in-memory fallback for local dev)
     - Test Lambda cold start performance
     - _Requirements: 19.1, 19.3, 19.4, 19.5_
 
-  - [ ] 22.2 Create deployment configuration files
+  - [x] 22.2 Create deployment configuration files
     - Create AWS SAM or Serverless Framework configuration
     - Configure API Gateway integration
     - Set up DynamoDB table definitions
     - Add CloudWatch logging configuration
     - _Requirements: 19.2_
 
-- [ ] 23. Final checkpoint and documentation
+- [x] 23. Final checkpoint and documentation
   - Ensure all tests pass (unit tests and property-based tests)
   - Verify system runs locally on ports 8000 (backend) and 3000 (frontend)
   - Test all 20 requirements with acceptance criteria
