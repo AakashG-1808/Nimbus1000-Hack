@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UrbanGuard AI – Presentation</title>
+  <style>
+    /* ── Reset & Base ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --gamma-bg: #0f0f11;
+      --card-bg: #1a1a1f;
+      --card-border: rgba(255,255,255,0.08);
+      --accent1: #7c5cfc;
+      --accent2: #5ce1e6;
+      --accent3: #ff6b6b;
+      --accent4: #f7c948;
+      --accent5: #4ade80;
+      --text-primary: #f1f1f3;
+      --text-secondary: #9a9ab0;
+      --text-muted: #56566a;
+      --radius: 18px;
+      --slide-max-w: 960px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--gamma-bg);
+      color: var(--text-primary);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      line-height: 1.6;
+    }
+
+    /* ── Navigation dots ──────────────────────────── */
+    .nav-dots {
+      position: fixed;
+      right: 24px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 100;
+    }
+    .nav-dots a {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      display: block;
+      transition: background .25s, transform .25s;
+      text-decoration: none;
+    }
+    .nav-dots a:hover { background: var(--accent1); transform: scale(1.4); }
+
+    /* ── Slide wrapper ────────────────────────────── */
+    .slide {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .slide-inner {
+      width: 100%;
+      max-width: var(--slide-max-w);
+      position: relative;
+      z-index: 2;
+    }
+
+    /* ── Background decorations ───────────────────── */
+    .blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.18;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* ── Typography ───────────────────────────────── */
+    .eyebrow {
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: clamp(2.2rem, 5vw, 3.8rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -.02em;
+    }
+    h2 {
+      font-size: clamp(1.6rem, 3.5vw, 2.6rem);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      margin-bottom: 8px;
+    }
+    h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 6px; }
+    p { color: var(--text-secondary); font-size: 1.05rem; }
+    .lead {
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: var(--text-secondary);
+      margin-top: 16px;
+      max-width: 680px;
+    }
+
+    /* ── Gradient text ────────────────────────────── */
+    .grad-purple  { background: linear-gradient(135deg, #a78bfa, #5ce1e6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .grad-orange  { background: linear-gradient(135deg, #f7c948, #ff6b6b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .grad-green   { background: linear-gradient(135deg, #4ade80, #5ce1e6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .grad-blue    { background: linear-gradient(135deg, #60a5fa, #7c5cfc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+    /* ── Cards ────────────────────────────────────── */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 28px 30px;
+      transition: border-color .25s, transform .25s;
+    }
+    .card:hover { border-color: rgba(124,92,252,.4); transform: translateY(-3px); }
+
+    .card-icon {
+      font-size: 2rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    /* ── Grid helpers ─────────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+
+    @media (max-width: 680px) {
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 900px) {
+      .grid-3 { grid-template-columns: 1fr 1fr; }
+      .grid-4 { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ── Pill / badge ─────────────────────────────── */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 14px;
+      border-radius: 100px;
+      font-size: .8rem;
+      font-weight: 600;
+      background: rgba(124,92,252,.15);
+      color: var(--accent1);
+      border: 1px solid rgba(124,92,252,.3);
+    }
+    .pill.teal { background: rgba(92,225,230,.1); color: var(--accent2); border-color: rgba(92,225,230,.3); }
+    .pill.green { background: rgba(74,222,128,.1); color: var(--accent5); border-color: rgba(74,222,128,.3); }
+    .pill.red   { background: rgba(255,107,107,.1); color: var(--accent3); border-color: rgba(255,107,107,.3); }
+    .pill.yellow{ background: rgba(247,201,72,.1); color: var(--accent4); border-color: rgba(247,201,72,.3); }
+
+    /* ── Stat block ───────────────────────────────── */
+    .stat { text-align: center; padding: 24px 16px; }
+    .stat-num {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800;
+      line-height: 1;
+      display: block;
+      margin-bottom: 6px;
+    }
+    .stat-label { font-size: .85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .1em; }
+
+    /* ── Arch diagram ─────────────────────────────── */
+    .arch-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .arch-box {
+      flex: 1;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      text-align: center;
+      font-size: .9rem;
+      font-weight: 600;
+    }
+    .arch-arrow { color: var(--text-muted); font-size: 1.3rem; flex-shrink: 0; }
+
+    /* ── Timeline / list ──────────────────────────── */
+    .timeline { list-style: none; padding: 0; }
+    .timeline li {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .timeline-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent1);
+      flex-shrink: 0;
+      margin-top: 6px;
+    }
+
+    /* ── Feature list ─────────────────────────────── */
+    .feat-list { list-style: none; padding: 0; }
+    .feat-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: .95rem;
+      color: var(--text-secondary);
+    }
+    .feat-list li::before { content: "✦"; color: var(--accent1); flex-shrink: 0; margin-top: 2px; }
+
+    /* ── Divider ──────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: var(--card-border);
+      margin: 24px 0;
+    }
+
+    /* ── Progress bar ─────────────────────────────── */
+    .progress-wrap { margin: 10px 0; }
+    .progress-label { display: flex; justify-content: space-between; font-size: .8rem; color: var(--text-muted); margin-bottom: 4px; }
+    .progress-bar {
+      height: 6px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.06);
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 10px;
+      background: linear-gradient(90deg, var(--accent1), var(--accent2));
+    }
+
+    /* ── Slide-specific colours ───────────────────── */
+    #s1 { background: radial-gradient(ellipse at 30% 40%, rgba(124,92,252,.12) 0%, transparent 70%),
+                       radial-gradient(ellipse at 80% 80%, rgba(92,225,230,.08) 0%, transparent 60%), var(--gamma-bg); }
+    #s2 { background: radial-gradient(ellipse at 70% 30%, rgba(255,107,107,.1) 0%, transparent 60%), var(--gamma-bg); }
+    #s3 { background: radial-gradient(ellipse at 20% 60%, rgba(74,222,128,.08) 0%, transparent 60%), var(--gamma-bg); }
+    #s4 { background: radial-gradient(ellipse at 60% 20%, rgba(92,225,230,.09) 0%, transparent 60%), var(--gamma-bg); }
+    #s5 { background: radial-gradient(ellipse at 30% 70%, rgba(124,92,252,.11) 0%, transparent 60%), var(--gamma-bg); }
+    #s6 { background: radial-gradient(ellipse at 75% 40%, rgba(247,201,72,.08) 0%, transparent 60%), var(--gamma-bg); }
+    #s7 { background: radial-gradient(ellipse at 20% 30%, rgba(92,225,230,.09) 0%, transparent 60%), var(--gamma-bg); }
+    #s8 { background: radial-gradient(ellipse at 60% 70%, rgba(124,92,252,.1)  0%, transparent 60%), var(--gamma-bg); }
+    #s9 { background: radial-gradient(ellipse at 40% 20%, rgba(74,222,128,.09) 0%, transparent 60%), var(--gamma-bg); }
+    #s10{ background: radial-gradient(ellipse at 50% 50%, rgba(124,92,252,.15) 0%, transparent 65%), var(--gamma-bg); }
+
+    /* ── Slide number ─────────────────────────────── */
+    .slide-num {
+      position: absolute;
+      bottom: 28px;
+      right: 32px;
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      color: var(--text-muted);
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ──────────────────── NAV DOTS ──────────────────── -->
+<nav class="nav-dots" aria-label="Slides">
+  <a href="#s1"  title="Title"></a>
+  <a href="#s2"  title="Problem Statement"></a>
+  <a href="#s3"  title="Our Solution"></a>
+  <a href="#s4"  title="Tech Stack"></a>
+  <a href="#s5"  title="Frontend"></a>
+  <a href="#s6"  title="Backend"></a>
+  <a href="#s7"  title="AI & Data Integration"></a>
+  <a href="#s8"  title="System Architecture"></a>
+  <a href="#s9"  title="Key Features & Impact"></a>
+  <a href="#s10" title="Demo / CTA"></a>
+</nav>
+
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 1 – TITLE
+══════════════════════════════════════════════════════ -->
+<section class="slide" id="s1">
+  <div class="slide-inner">
+    <div class="eyebrow">🚀 Nimbus1000 Hackathon</div>
+    <h1><span class="grad-purple">UrbanGuard AI</span></h1>
+    <p class="lead">
+      An AI-powered urban infrastructure monitoring &amp; risk prediction system
+      that transforms citizen complaints into actionable city intelligence —
+      built for Bengaluru, scalable everywhere.
+    </p>
+    <div style="margin-top:36px; display:flex; flex-wrap:wrap; gap:10px;">
+      <span class="pill">⚡ Real-time</span>
+      <span class="pill teal">🤖 AI-Powered</span>
+      <span class="pill green">🗺️ Geo-Clustered</span>
+      <span class="pill yellow">☁️ AWS Serverless</span>
+    </div>
+    <div class="divider" style="margin-top:44px;"></div>
+    <div style="display:flex; flex-wrap:wrap; gap:32px; margin-top:8px;">
+      <div>
+        <div style="font-size:.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em;">Team</div>
+        <div style="font-weight:700; color:var(--text-primary); margin-top:2px;">AakashG-1808 &amp; Team</div>
+      </div>
+      <div>
+        <div style="font-size:.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em;">Stage</div>
+        <div style="font-weight:700; color:var(--text-primary); margin-top:2px;">Production-Ready MVP</div>
+      </div>
+      <div>
+        <div style="font-size:.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em;">Test Pass Rate</div>
+        <div style="font-weight:700; color:var(--accent5); margin-top:2px;">99.3 %</div>
+      </div>
+    </div>
+  </div>
+  <div class="blob" style="width:500px;height:500px;background:var(--accent1);top:-120px;right:-140px;"></div>
+  <span class="slide-num">01 / 10</span>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 2 – PROBLEM STATEMENT
+══════════════════════════════════════════════════════ -->
+<section class="slide" id="s2">
+  <div class="slide-inner">
+    <div class="eyebrow">🔍 Problem Statement</div>
+    <h2>Urban infrastructure is <span class="grad-orange">broken &amp; invisible</span></h2>
+    <p class="lead" style="max-width:100%;">
+      Bengaluru — India's tech capital — struggles with fragmented, slow-reacting civic systems.
+      Citizens have no reliable channel, and authorities have no unified intelligence layer.
+    </p>
+    <div class="divider"></div>
+    <div class="grid-2" style="margin-top:8px;">
+      <div class="card">
+        <span class="card-icon">🕳️</span>
+        <h3>Fragmented Reporting</h3>
+        <p>Complaints are scattered across social media, helplines and apps — no single source of truth.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">🐢</span>
+        <h3>Delayed Response</h3>
+        <p>Manual triage means potholes, flooding and outages go unresolved for days or weeks.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">🚫</span>
+        <h3>Zero Predictive Capability</h3>
+        <p>Authorities react after incidents occur — there is no system to forecast risk zones in advance.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">🔇</span>
+        <h3>Context Blindness</h3>
+        <p>Weather and traffic data are never correlated with complaint patterns, leading to missed insights.</p>
+      </div>
+    </div>
+    <div style="margin-top:28px; padding:20px 24px; border-radius:14px;
+                border-left:4px solid var(--accent3);
+                background:rgba(255,107,107,.07);">
+      <strong style="color:var(--accent3);">Core Question:</strong>
+      <span style="color:var(--text-secondary);">
+        How can a city transform <em>noisy citizen signals</em> into <em>intelligent, predictive decisions</em>
+        fast enough to prevent infrastructure failure?
+      </span>
+    </div>
+  </div>
+  <span class="slide-num">02 / 10</span>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 3 – OUR SOLUTION
+══════════════════════════════════════════════════════ -->
+<section class="slide" id="s3">
+  <div class="slide-inner">
+    <div class="eyebrow">💡 Our Solution</div>
+    <h2>A unified <span class="grad-green">AI intelligence layer</span> for the city</h2>
+    <p class="lead">
+      UrbanGuard AI ingests citizen complaints in real-time, classifies them with AI,
+      clusters them geographically, calculates risk scores, and surfaces predictive
+      insights on a single dashboard — all within 500 ms.
+    </p>
+    <div class="grid-3" style="margin-top:32px;">
+      <div class="card">
+        <span class="card-icon">📲</span>
+        <h3>Submit &amp; Classify</h3>
+        <p>Citizens file complaints via a mobile-friendly form. Amazon Bedrock AI auto-classifies into 8 categories.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">📍</span>
+        <h3>Cluster &amp; Visualise</h3>
+        <p>Geo-clustering groups complaints within 500 m. Leaflet.js map colour-codes LOW / MEDIUM / HIGH risk zones.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">🔮</span>
+        <h3>Predict &amp; Alert</h3>
+        <p>Risk engine scores zones 0–100. AI predicts future incidents &amp; auto-generates daily civic reports.</p>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div style="display:flex; flex-wrap:wrap; gap:10px;">
+      <span class="pill green">✅ 8 complaint categories</span>
+      <span class="pill green">✅ 40+ Bengaluru locations</span>
+      <span class="pill green">✅ &lt; 500 ms end-to-end</span>
+      <span class="pill green">✅ 85%+ AI accuracy</span>
+      <span class="pill green">✅ Offline fallback mode</span>
+    </div>
+  </div>
+  <span class="slide-num">03 / 10</span>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 4 – TECH STACK OVERVIEW
+══════════════════════════════════════════════════════ -->
+<section class="slide" id="s4">
+  <div class="slide-inner">
+    <div class="eyebrow">🛠️ Technology</div>
+    <h2>Full-Stack <span class="grad-blue">Tech Stack</span></h2>
+    <p class="lead">Modern, cloud-native stack chosen for developer velocity, scalability and AI-readiness.</p>
+    <div class="grid-4" style="margin-top:32px;">
+      <div class="card" style="border-color:rgba(92,225,230,.25);">
+        <h3 style="color:var(--accent2);">Frontend</h3>
+        <ul class="feat-list" style="margin-top:10px;">
+          <li>React 18</li>
+          <li>React Router v7</li>
+          <li>Leaflet.js</li>
+          <li>Chart.js 4</li>
+          <li>Axios</li>
+        </ul>
+      </div>
+      <div class="card" style="border-color:rgba(124,92,252,.25);">
+        <h3 style="color:var(--accent1);">Backend</h3>
+        <ul class="feat-list" style="margin-top:10px;">
+          <li>FastAPI</li>
+          <li>Python 3.11+</li>
+          <li>Pydantic v2</li>
+          <li>Uvicorn</li>
+          <li>Mangum (Lambda)</li>
+        </ul>
+      </div>
+      <div class="card" style="border-color:rgba(247,201,72,.25);">
+        <h3 style="color:var(--accent4);">AI / Data</h3>
+        <ul class="feat-list" style="margin-top:10px;">
+          <li>Amazon Bedrock</li>
+          <li>Claude AI</li>
+          <li>OpenWeatherMap</li>
+          <li>Geo-Clustering</li>
+          <li>Risk Engine</li>
+        </ul>
+      </div>
+      <div class="card" style="border-color:rgba(74,222,128,.25);">
+        <h3 style="color:var(--accent5);">Cloud / Infra</h3>
+        <ul class="feat-list" style="margin-top:10px;">
+          <li>AWS Lambda</li>
+          <li>DynamoDB</li>
+          <li>S3 / SQS / SNS</li>
+          <li>AWS SAM</li>
+          <li>CORS + Auth</li>
+        </ul>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="grid-2">
+      <div>
+        <div style="font-size:.8rem; color:var(--text-muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:.1em;">Backend Test Coverage</div>
+        <div class="progress-wrap">
+          <div class="progress-label"><span>pytest (Unit)</span><span>95%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:95%;"></div></div>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-label"><span>Hypothesis (Property)</span><span>90%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:90%;background:linear-gradient(90deg,var(--accent4),var(--accent3));"></div></div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:.8rem; color:var(--text-muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:.1em;">Frontend Test Coverage</div>
+        <div class="progress-wrap">
+          <div class="progress-label"><span>Jest + RTL</span><span>99.3%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:99.3%;background:linear-gradient(90deg,var(--accent5),var(--accent2));"></div></div>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-label"><span>fast-check (Property)</span><span>88%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:88%;background:linear-gradient(90deg,var(--accent2),var(--accent1));"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <span class="slide-num">04 / 10</span>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 5 – FRONTEND
+══════════════════════════════════════════════════════ -->
+<section class="slide" id="s5">
+  <div class="slide-inner">
+    <div class="eyebrow">🎨 Frontend</div>
+    <h2><span class="grad-purple">React 18</span> – Smart, Responsive UI</h2>
+    <p class="lead">A dashboard-first UI built with composable React components, real-time polling and rich data visualisations.</p>
+
+    <div class="grid-2" style="margin-top:32px; align-items:start;">
+      <!-- Left column: components list -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <div class="card" style="padding:18px 22px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:1.4rem;">🗺️</span>
+            <div>
+              <h3>MapVisualizer</h3>
+              <p style="font-size:.9rem;">Leaflet interactive map – pans, zooms, colour-coded risk zones &amp; cluster markers.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="padding:18px 22px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:1.4rem;">📋</span>
+            <div>
+              <h3>ComplaintForm &amp; Feed</h3>
+              <p style="font-size:.9rem;">Validated submission form + live scrolling feed of the latest 20 complaints.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="padding:18px 22px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:1.4rem;">📈</span>
+            <div>
+              <h3>TrendCharts</h3>
+              <p style="font-size:.9rem;">7-day Chart.js line charts for complaint volume and risk score trends.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="padding:18px 22px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:1.4rem;">🤖</span>
+            <div>
+              <h3>AIInsightsPanel &amp; PredictionsPanel</h3>
+              <p style="font-size:.9rem;">Surfaces AI confidence scores, top-risk predictions and forecast summaries.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right column: highlights -->
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <div class="card" style="background:rgba(124,92,252,.08); border-color:rgba(124,92,252,.3);">
+          <h3 style="color:var(--accent1); margin-bottom:14px;">Dev Highlights</h3>
+          <ul class="feat-list">
+            <li>React Router v7 for client-side navigation</li>
+            <li>Axios API service layer with error boundaries</li>
+            <li>30-second real-time polling for live data</li>
+            <li>Mobile-responsive CSS grid layout</li>
+            <li>LoginPage with auth middleware integration</li>
+            <li>LocationPicker for 40+ Bengaluru areas</li>
+          </ul>
+        </div>
+        <div class="card" style="background:rgba(74,222,128,.06); border-color:rgba(74,222,128,.25);">
+          <h3 style="color:var(--accent5); margin-bottom:14px;">Testing (148/149 passing)</h3>
+          <ul class="feat-list">
+            <li>Jest + React Testing Library</li>
+            <li>Unit, integration &amp; property-based tests</li>
+            <li>fast-check for invariant validation</li>
+          </ul>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:4px;">
+          <span class="pill">Port :3000</span>
+          <span class="pill teal">10 Components</span>
+          <span class="pill yellow">148/149 Tests ✅</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <span class="slide-num">05 / 10</span>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 6 – BACKEND
+══════════════════════════════════════════════════════ -->
+<section class="slide" id="s6">
+  <div class="slide-inner">
+    <div class="eyebrow">⚙️ Backend</div>
+    <h2><span class="grad-orange">FastAPI</span> – High-Performance Python API</h2>
+    <p class="lead">A modular FastAPI application with dedicated processors for AI, risk, weather, traffic and storage.</p>
+
+    <div class="grid-3" style="margin-top:32px;">
+      <div class="card">
+        <span class="card-icon">🧩</span>
+        <h3>Core Modules</h3>
+        <ul class="feat-list" style="margin-top:8px;">
+          <li>complaint_processor.py</li>
+          <li>ai_classifier.py</li>
+          <li>cluster_detector.py</li>
+          <li>risk_engine.py</li>
+          <li>incident_predictor.py</li>
+          <li>report_generator.py</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="card-icon">🔌</span>
+        <h3>Integrations</h3>
+        <ul class="feat-list" style="margin-top:8px;">
+          <li>weather_integrator.py</li>
+          <li>traffic_analyzer.py</li>
+          <li>bbmp_data_loader.py</li>
+          <li>storage.py (in-mem/dynamo)</li>
+          <li>auth_middleware.py</li>
+          <li>error_handling.py</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="card-icon">📡</span>
+        <h3>Key API Endpoints</h3>
+        <ul class="feat-list" style="margin-top:8px;">
+          <li>POST /report-complaint</li>
+          <li>GET /complaints</li>
+          <li>GET /risk-hotspots</li>
+          <li>GET /weather</li>
+          <li>GET /traffic</li>
+          <li>GET /daily-report</li>
+          <li>WebSocket /ws</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="grid-2">
+      <div class="card" style="background:rgba(247,201,72,.06); border-color:rgba(247,201,72,.25);">
+        <h3 style="color:var(--accent4);">Performance Targets</h3>
+        <div style="margin-top:12px;">
+          <div class="progress-wrap">
+            <div class="progress-label"><span>Complaint submission</span><span>&lt; 500 ms</span></div>
+            <div class="progress-bar"><div class="progress-fill" style="width:92%;background:linear-gradient(90deg,var(--accent4),var(--accent3));"></div></div>
+          </div>
+          <div class="progress-wrap">
+            <div class="progress-label"><span>Risk calculation</span><span>&lt; 2 s</span></div>
+            <div class="progress-bar"><div class="progress-fill" style="width:85%;background:linear-gradient(90deg,var(--accent4),var(--accent3));"></div></div>
+          </div>
+          <div class="progress-wrap">
+            <div class="progress-label"><span>Dashboard load</span><span>&lt; 3 s</span></div>
+            <div class="progress-bar"><div class="progress-fill" style="width:80%;background:linear-gradient(90deg,var(--accent4),var(--accent3));"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="background:rgba(92,225,230,.06); border-color:rgba(92,225,230,.25);">
+        <h3 style="color:var(--accent2);">Production Features</h3>
+        <ul class="feat-list" style="margin-top:10px;">
+          <li>Pydantic v2 input validation</li>
+          <li>CORS protection configured</li>
+          <li>Rate limiting via Slowapi</li>
+          <li>JWT auth middleware</li>
+          <li>Structured logging &amp; error codes</li>
+          <li>Auto-generated Swagger /docs</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <span class="slide-num">06 / 10</span>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 7 – AI & DATA INTEGRATION
+══════════════════════════════════════════════════════ -->
+<section class="slide" id="s7">
+  <div class="slide-inner">
+    <div class="eyebrow">🤖 AI &amp; Data</div>
+    <h2>Intelligent <span class="grad-blue">Classification &amp; Prediction</span></h2>
+    <p class="lead">Three AI/data layers work in concert: complaint classification, risk scoring and incident prediction — all enriched with real-world weather and traffic context.</p>
+
+    <div class="grid-2" style="margin-top:32px; gap:24px;">
+      <!-- Left: AI flow -->
+      <div>
+        <h3 style="color:var(--text-secondary); margin-bottom:16px; font-size:.85rem; text-transform:uppercase; letter-spacing:.1em;">AI Classification Pipeline</h3>
+        <div class="arch-row">
+          <div class="arch-box" style="border-color:rgba(124,92,252,.3); color:var(--accent1);">Citizen Text Input</div>
+          <span class="arch-arrow">→</span>
+          <div class="arch-box" style="border-color:rgba(92,225,230,.3); color:var(--accent2);">Amazon Bedrock (Claude)</div>
+        </div>
+        <div class="arch-row" style="padding-left:48px;">
+          <span class="arch-arrow" style="transform:rotate(90deg); margin-right:0; margin-left:20px;">↓</span>
+        </div>
+        <div class="arch-row">
+          <div class="arch-box" style="border-color:rgba(74,222,128,.3); color:var(--accent5);">Category + Confidence</div>
+          <span class="arch-arrow">→</span>
+          <div class="arch-box" style="border-color:rgba(247,201,72,.3); color:var(--accent4);">Risk Engine (0–100)</div>
+        </div>
+        <div class="arch-row" style="padding-left:48px;">
+          <span class="arch-arrow" style="transform:rotate(90deg); margin-right:0; margin-left:20px;">↓</span>
+        </div>
+        <div class="arch-row">
+          <div class="arch-box" style="border-color:rgba(255,107,107,.3); color:var(--accent3); grid-column:1/-1; width:100%;">Incident Predictions + Daily Report</div>
+        </div>
+        <div style="margin-top:14px; padding:12px 16px; border-radius:10px; background:rgba(124,92,252,.08); font-size:.85rem; color:var(--text-secondary);">
+          🔄 <strong style="color:var(--text-primary);">Fallback:</strong> If Bedrock is unavailable, keyword-based classifier activates automatically — zero downtime.
+        </div>
+      </div>
+
+      <!-- Right: data integrations -->
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div class="card">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:1.6rem;">🌦️</span>
+            <div>
+              <h3>OpenWeatherMap API</h3>
+              <p style="font-size:.9rem;">Live temperature, humidity, wind, visibility. Heavy rain <em>boosts</em> flooding risk score; low visibility raises traffic danger.</p>
+              <span class="pill teal" style="margin-top:8px; font-size:.75rem;">Updates every 30 min</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:1.6rem;">🚗</span>
+            <div>
+              <h3>Traffic Analyzer</h3>
+              <p style="font-size:.9rem;">Congestion levels (LOW / MEDIUM / HIGH) mapped to affected routes. High congestion amplifies incident risk score.</p>
+              <span class="pill yellow" style="margin-top:8px; font-size:.75rem;">Updates every 10 min</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:1.6rem;">📍</span>
+            <div>
+              <h3>Geo-Clustering</h3>
+              <p style="font-size:.9rem;">Groups complaints within 500 m radius. Computes density per km² and dominant complaint category per zone.</p>
+              <span class="pill" style="margin-top:8px; font-size:.75rem;">Recalculates every 15 min</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <span class="slide-num">07 / 10</span>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 8 – SYSTEM ARCHITECTURE
+══════════════════════════════════════════════════════ -->
+<section class="slide" id="s8">
+  <div class="slide-inner">
+    <div class="eyebrow">🏗️ Architecture</div>
+    <h2>Cloud-Native <span class="grad-purple">System Design</span></h2>
+    <p class="lead">Three-tier serverless architecture: a React SPA talks to a FastAPI service layer that orchestrates AWS managed services.</p>
+
+    <div style="margin-top:32px;">
+      <!-- Tier 1: Client -->
+      <div style="text-align:center; margin-bottom:8px;">
+        <span class="pill teal" style="font-size:.8rem;">PRESENTATION TIER</span>
+      </div>
+      <div style="display:flex; gap:12px; justify-content:center; margin-bottom:8px; flex-wrap:wrap;">
+        <div class="arch-box" style="max-width:160px; border-color:rgba(92,225,230,.3); color:var(--accent2);">React 18<br/><small style="color:var(--text-muted);">Dashboard UI</small></div>
+        <div class="arch-box" style="max-width:160px; border-color:rgba(92,225,230,.3); color:var(--accent2);">Leaflet Map<br/><small style="color:var(--text-muted);">Risk Viz</small></div>
+        <div class="arch-box" style="max-width:160px; border-color:rgba(92,225,230,.3); color:var(--accent2);">Chart.js<br/><small style="color:var(--text-muted);">Trends</small></div>
+      </div>
+      <div style="text-align:center; font-size:1.4rem; color:var(--text-muted); margin:4px 0;">↕ HTTPS / WebSocket</div>
+
+      <!-- Tier 2: App -->
+      <div style="text-align:center; margin-bottom:8px;">
+        <span class="pill" style="font-size:.8rem;">APPLICATION TIER</span>
+      </div>
+      <div style="display:flex; gap:12px; justify-content:center; margin-bottom:8px; flex-wrap:wrap;">
+        <div class="arch-box" style="max-width:160px; border-color:rgba(124,92,252,.3); color:var(--accent1);">FastAPI<br/><small style="color:var(--text-muted);">REST + WS</small></div>
+        <div class="arch-box" style="max-width:160px; border-color:rgba(124,92,252,.3); color:var(--accent1);">AWS Lambda<br/><small style="color:var(--text-muted);">Serverless</small></div>
+        <div class="arch-box" style="max-width:160px; border-color:rgba(124,92,252,.3); color:var(--accent1);">Bedrock AI<br/><small style="color:var(--text-muted);">Classifier</small></div>
+        <div class="arch-box" style="max-width:160px; border-color:rgba(124,92,252,.3); color:var(--accent1);">SQS / SNS<br/><small style="color:var(--text-muted);">Events</small></div>
+      </div>
+      <div style="text-align:center; font-size:1.4rem; color:var(--text-muted); margin:4px 0;">↕ SDK Calls</div>
+
+      <!-- Tier 3: Data -->
+      <div style="text-align:center; margin-bottom:8px;">
+        <span class="pill green" style="font-size:.8rem;">DATA TIER</span>
+      </div>
+      <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+        <div class="arch-box" style="max-width:160px; border-color:rgba(74,222,128,.3); color:var(--accent5);">DynamoDB<br/><small style="color:var(--text-muted);">Complaints</small></div>
+        <div class="arch-box" style="max-width:160px; border-color:rgba(74,222,128,.3); color:var(--accent5);">S3<br/><small style="color:var(--text-muted);">Reports</small></div>
+        <div class="arch-box" style="max-width:160px; border-color:rgba(74,222,128,.3); color:var(--accent5);">OpenWeather<br/><small style="color:var(--text-muted);">Weather API</small></div>
+        <div class="arch-box" style="max-width:160px; border-color:rgba(74,222,128,.3); color:var(--accent5);">In-Memory<br/><small style="color:var(--text-muted);">Dev / Fallback</small></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div style="display:flex; flex-wrap:wrap; gap:10px;">
+      <span class="pill">IaC via AWS SAM</span>
+      <span class="pill teal">Auto-scaling Lambda</span>
+      <span class="pill green">Local → Cloud same code</span>
+      <span class="pill yellow">Swagger /docs built-in</span>
+    </div>
+  </div>
+  <span class="slide-num">08 / 10</span>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 9 – FEATURES & IMPACT
+══════════════════════════════════════════════════════ -->
+<section class="slide" id="s9">
+  <div class="slide-inner">
+    <div class="eyebrow">✨ Impact</div>
+    <h2>Features &amp; <span class="grad-green">Measured Impact</span></h2>
+
+    <div class="grid-4" style="margin-top:28px;">
+      <div class="card stat">
+        <span class="stat-num grad-purple">8</span>
+        <span class="stat-label">Complaint Categories</span>
+      </div>
+      <div class="card stat">
+        <span class="stat-num grad-green">40+</span>
+        <span class="stat-label">Bengaluru Locations</span>
+      </div>
+      <div class="card stat">
+        <span class="stat-num grad-orange">85%+</span>
+        <span class="stat-label">AI Accuracy Target</span>
+      </div>
+      <div class="card stat">
+        <span class="stat-num grad-blue">99.3%</span>
+        <span class="stat-label">Test Pass Rate</span>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:20px;">
+      <div>
+        <h3 style="color:var(--text-secondary); margin-bottom:14px; font-size:.85rem; text-transform:uppercase; letter-spacing:.1em;">Citizen Capabilities</h3>
+        <ul class="feat-list">
+          <li>Submit geo-tagged complaints in &lt; 30 seconds</li>
+          <li>Track complaint status in real-time</li>
+          <li>View live risk map of their neighbourhood</li>
+          <li>Browse weather &amp; traffic context</li>
+          <li>Access AI-powered incident predictions</li>
+        </ul>
+      </div>
+      <div>
+        <h3 style="color:var(--text-secondary); margin-bottom:14px; font-size:.85rem; text-transform:uppercase; letter-spacing:.1em;">Authority Capabilities</h3>
+        <ul class="feat-list">
+          <li>Unified dashboard — one source of truth</li>
+          <li>Risk-ranked hotspot queue for resource allocation</li>
+          <li>Daily automated civic risk reports</li>
+          <li>Predictive alerts before incidents escalate</li>
+          <li>Historical 7-day trend analysis &amp; export</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div style="padding:20px 24px; border-radius:14px; background:rgba(74,222,128,.06); border:1px solid rgba(74,222,128,.25); display:flex; align-items:center; gap:16px;">
+      <span style="font-size:2.2rem;">🏙️</span>
+      <div>
+        <strong style="color:var(--accent5);">Potential Urban Impact</strong>
+        <p style="font-size:.9rem; margin-top:4px;">By converting reactive complaint handling into proactive risk management, UrbanGuard AI can help Bengaluru reduce infrastructure failure response time by an estimated 60 % and improve complaint-to-resolution cycle efficiency citywide.</p>
+      </div>
+    </div>
+  </div>
+  <span class="slide-num">09 / 10</span>
+</section>
+
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 10 – DEMO / CTA
+══════════════════════════════════════════════════════ -->
+<section class="slide" id="s10">
+  <div class="slide-inner" style="text-align:center;">
+    <div class="eyebrow" style="text-align:center;">🎯 Get Started</div>
+    <h2 style="max-width:700px; margin:0 auto 16px;"><span class="grad-purple">See it live</span> in under 5 minutes</h2>
+    <p style="color:var(--text-secondary); max-width:560px; margin:0 auto;">Clone the repo, run two commands and the full-stack AI dashboard is running on your machine.</p>
+
+    <div style="margin:36px auto; background:var(--card-bg); border:1px solid var(--card-border);
+                border-radius:14px; padding:24px 28px; max-width:620px; text-align:left;">
+      <div style="font-size:.75rem; color:var(--text-muted); margin-bottom:12px; letter-spacing:.1em; text-transform:uppercase;">Quick Start</div>
+      <code style="display:block; color:var(--accent5); font-size:.9rem; line-height:1.9; font-family:'Courier New', monospace;">
+        <span style="color:var(--text-muted);"># 1. Install backend</span><br/>
+        cd backend &amp;&amp; pip install -r requirements.txt<br/>
+        uvicorn main:app --reload<br/><br/>
+        <span style="color:var(--text-muted);"># 2. Install frontend</span><br/>
+        cd frontend &amp;&amp; npm install<br/>
+        npm start
+      </code>
+    </div>
+
+    <div class="grid-3" style="max-width:700px; margin:0 auto 36px;">
+      <div class="card" style="text-align:center; padding:20px 16px;">
+        <div style="font-size:1.8rem; margin-bottom:6px;">🌐</div>
+        <div style="font-weight:700; font-size:.9rem;">Frontend</div>
+        <div style="color:var(--accent2); font-size:.85rem; margin-top:4px;">localhost:3000</div>
+      </div>
+      <div class="card" style="text-align:center; padding:20px 16px;">
+        <div style="font-size:1.8rem; margin-bottom:6px;">⚡</div>
+        <div style="font-weight:700; font-size:.9rem;">Backend API</div>
+        <div style="color:var(--accent1); font-size:.85rem; margin-top:4px;">localhost:8000</div>
+      </div>
+      <div class="card" style="text-align:center; padding:20px 16px;">
+        <div style="font-size:1.8rem; margin-bottom:6px;">📖</div>
+        <div style="font-weight:700; font-size:.9rem;">Swagger Docs</div>
+        <div style="color:var(--accent4); font-size:.85rem; margin-top:4px;">localhost:8000/docs</div>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center;">
+      <span class="pill">🐙 github.com/AakashG-1808/Nimbus1000-Hack</span>
+      <span class="pill teal">☁️ AWS Serverless Ready</span>
+      <span class="pill green">📄 Full Docs Included</span>
+    </div>
+
+    <div class="divider" style="max-width:400px; margin:36px auto 24px;"></div>
+    <p style="color:var(--text-muted); font-size:.85rem;">
+      Built for the <strong style="color:var(--text-secondary);">Nimbus1000 Hackathon</strong> · UrbanGuard AI · 2024
+    </p>
+  </div>
+  <div class="blob" style="width:600px;height:600px;background:var(--accent1);bottom:-200px;left:-200px;opacity:.12;"></div>
+  <div class="blob" style="width:400px;height:400px;background:var(--accent2);top:-100px;right:-100px;opacity:.1;"></div>
+  <span class="slide-num">10 / 10</span>
+</section>
+
+</body>
+</html>
