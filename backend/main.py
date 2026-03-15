@@ -111,6 +111,19 @@ class ComplaintResponse(BaseModel):
     timestamp: str = Field(..., description="ISO 8601 timestamp")
     coordinates: ComplaintCoordinates
     classification_confidence: float = Field(..., description="Classification confidence")
+    status: str = Field(default="open", description="open or resolved")
+    resolved_at: Optional[str] = Field(default=None)
+    expected_resolution_date: Optional[str] = Field(default=None)
+    resolution_note: Optional[str] = Field(default=None)
+    image_url: Optional[str] = Field(default=None)
+
+
+class ResolveComplaintRequest(BaseModel):
+    """Request body for resolving a complaint (admin only)."""
+    expected_resolution_date: Optional[str] = Field(default=None, description="ISO date string")
+    resolution_note: Optional[str] = Field(default=None)
+    image_url: Optional[str] = Field(default=None)
+    mark_resolved: bool = Field(default=False)
 
 
 def get_cors_origins() -> list[str]:
@@ -142,7 +155,7 @@ async def lifespan(app: FastAPI):
     
     # Start cluster detector background scheduler
     cluster_detector = get_cluster_detector(
-        get_complaints_callback=storage.get_all_complaints
+        get_complaints_callback=lambda: [c for c in storage.get_all_complaints() if getattr(c, 'status', 'open') == 'open']
     )
     print(f"✓ Started cluster detector (recalculation interval: {cluster_detector.RECALCULATION_INTERVAL}s)")
     
@@ -614,10 +627,62 @@ async def get_complaints(
                 "latitude": c.coordinates[0],
                 "longitude": c.coordinates[1]
             },
-            "classification_confidence": c.classification_confidence
+            "classification_confidence": c.classification_confidence,
+            "status": getattr(c, "status", "open"),
+            "resolved_at": c.resolved_at.isoformat() if getattr(c, "resolved_at", None) else None,
+            "expected_resolution_date": c.expected_resolution_date.isoformat() if getattr(c, "expected_resolution_date", None) else None,
+            "resolution_note": getattr(c, "resolution_note", None),
+            "image_url": getattr(c, "image_url", None),
         }
         for c in complaints
     ]
+
+
+@api_router.patch("/complaints/{complaint_id}/resolve")
+async def resolve_complaint(
+    complaint_id: str,
+    resolve_data: ResolveComplaintRequest,
+    current_user: dict = Depends(get_current_user_dep)
+):
+    """Admin-only: update resolution details on a complaint."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from storage import storage
+    with storage._lock:
+        complaint = next((c for c in storage._complaints if c.complaint_id == complaint_id), None)
+        if not complaint:
+            raise HTTPException(status_code=404, detail="Complaint not found")
+
+        if resolve_data.expected_resolution_date:
+            try:
+                complaint.expected_resolution_date = datetime.fromisoformat(resolve_data.expected_resolution_date)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format")
+
+        if resolve_data.resolution_note is not None:
+            complaint.resolution_note = resolve_data.resolution_note
+
+        if resolve_data.image_url is not None:
+            complaint.image_url = resolve_data.image_url
+
+        if resolve_data.mark_resolved:
+            complaint.status = "resolved"
+            complaint.resolved_at = datetime.now()
+
+    # Force immediate recalculation so the map updates right away
+    if resolve_data.mark_resolved:
+        try:
+            from cluster_detector import get_cluster_detector
+            from risk_engine import get_risk_engine
+            cd = get_cluster_detector()
+            cd.recalculate_clusters()
+            re = get_risk_engine()
+            re.calculate_all_risk_zones()
+        except Exception as e:
+            logger.warning(f"Post-resolve recalculation failed: {e}")
+
+    return {"success": True, "complaint_id": complaint_id, "status": complaint.status}
 
 
 @api_router.get("/clusters")
@@ -769,7 +834,7 @@ async def get_predictions():
     
     # Get current risk zones
     risk_engine = get_risk_engine()
-    risk_zones = risk_engine.get_cached_risk_zones()
+    risk_zones = risk_engine.get_filtered_risk_zones()
     
     # Get weather and traffic data
     weather_integrator = get_weather_integrator()

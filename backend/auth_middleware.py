@@ -19,8 +19,31 @@ logger = logging.getLogger(__name__)
 JWT_SECRET = os.getenv("JWT_SECRET", "urbanguard-dev-secret-key-change-in-production")
 TOKEN_EXPIRY_HOURS = 24
 
-# In-memory fallback for local dev
+# Local file-based storage for dev (persists across restarts)
+_USERS_FILE = os.path.join(os.path.dirname(__file__), "users_local.json")
 _users_store: Dict[str, dict] = {}
+
+
+def _load_users_from_file():
+    global _users_store
+    if os.path.exists(_USERS_FILE):
+        try:
+            with open(_USERS_FILE, "r") as f:
+                _users_store = json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load users file: {e}")
+            _users_store = {}
+
+
+def _save_users_to_file():
+    try:
+        with open(_USERS_FILE, "w") as f:
+            json.dump(_users_store, f)
+    except Exception as e:
+        logger.warning(f"Could not save users file: {e}")
+
+
+_load_users_from_file()
 
 # DynamoDB setup (only when table name is provided)
 _dynamodb_table = None
@@ -98,6 +121,7 @@ def _put_user(email: str, user_data: dict):
         table.put_item(Item=user_data)
     else:
         _users_store[email] = user_data
+        _save_users_to_file()
 
 
 def signup_user(email: str, password: str, role: str = "citizen") -> dict:

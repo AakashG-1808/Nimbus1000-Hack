@@ -493,6 +493,7 @@ class RiskEngine:
                 logger.info(f"Cached explanation for {area_name} / {pred.incident_type}")
         except Exception as e:
             logger.warning(f"Background explanation generation failed: {e}")
+<<<<<<< Updated upstream
 
     def get_cached_risk_zones(self) -> List[RiskZone]:
         """
@@ -513,6 +514,8 @@ class RiskEngine:
                 cache = []
 
         return cache
+=======
+>>>>>>> Stashed changes
     
     def get_filtered_risk_zones(self, min_score: float = None) -> List[RiskZone]:
         """

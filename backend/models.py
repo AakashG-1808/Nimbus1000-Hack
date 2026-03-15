@@ -44,7 +44,12 @@ class Complaint:
     coordinates: Tuple[float, float]
     complaint_id: str = field(default_factory=lambda: str(uuid4()))
     classification_confidence: float = 1.0
-    
+    status: str = "open"  # open | resolved
+    resolved_at: Optional[datetime] = None
+    expected_resolution_date: Optional[datetime] = None
+    resolution_note: Optional[str] = None
+    image_url: Optional[str] = None
+
     # Supported categories
     CATEGORIES = [
         "pothole",

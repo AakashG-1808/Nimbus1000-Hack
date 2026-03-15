@@ -66,6 +66,11 @@ export const complaintsAPI = {
   getAllComplaints: () => {
     return api.get('/complaints');
   },
+
+  // Admin: resolve / update a complaint
+  resolveComplaint: (complaintId, data) => {
+    return api.patch(`/complaints/${complaintId}/resolve`, data);
+  },
 };
 
 export const riskAPI = {
