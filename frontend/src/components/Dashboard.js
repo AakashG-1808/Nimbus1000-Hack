@@ -115,6 +115,7 @@ const Dashboard = () => {
 
   // User auth info
   const user = getCurrentUser();
+  const userIsAdmin = isAdmin();
   const handleLogout = () => {
     logout();
     window.location.href = '/login';
@@ -525,6 +526,11 @@ const Dashboard = () => {
     );
   }, [complaintsState.data, filters.categoryToggles]);
 
+  // Only show open (unresolved) complaints on the map
+  const openComplaints = useMemo(() => {
+    return filteredComplaints.filter(c => (c.status || 'open') === 'open');
+  }, [filteredComplaints]);
+
   const filteredRiskZones = useMemo(() => {
     if (filters.riskLevel === 'all') {
       return riskZonesState.data;
@@ -630,13 +636,15 @@ const Dashboard = () => {
           </div>
         </div>
         <div className="dashboard-actions">
-          <button 
-            className="export-csv-button"
-            onClick={exportToCSV}
-            title="Export filtered complaints to CSV"
-          >
-            <span role="img" aria-label="download">⬇️</span> Export CSV
-          </button>
+          {userIsAdmin && (
+            <button 
+              className="export-csv-button"
+              onClick={exportToCSV}
+              title="Export filtered complaints to CSV"
+            >
+              <span role="img" aria-label="download">⬇️</span> Export CSV
+            </button>
+          )}
           <button 
             className="report-complaint-button"
             onClick={() => setShowComplaintForm(true)}
@@ -741,7 +749,7 @@ const Dashboard = () => {
             {/* MapVisualizer component - Task 15.1 */}
             <MapVisualizer 
               riskZones={filteredRiskZones}
-              complaints={filteredComplaints}
+              complaints={openComplaints}
               updateInterval={30000}
               loading={riskZonesState.loading}
               error={riskZonesState.error}
@@ -769,6 +777,8 @@ const Dashboard = () => {
               loading={complaintsState.loading}
               error={complaintsState.error}
               stale={isStale(complaintsState)}
+              isAdmin={userIsAdmin}
+              onComplaintUpdate={fetchDashboardData}
             />
           </div>
         </section>
@@ -838,6 +848,7 @@ const Dashboard = () => {
         </section>
 
         {/* Predictions Section */}
+        {userIsAdmin && (
         <section className="dashboard-section predictions-section">
           <div className="section-header">
             <h2>Incident Predictions</h2>
@@ -859,8 +870,10 @@ const Dashboard = () => {
             />
           </div>
         </section>
+        )}
 
         {/* AI Insights Section */}
+        {userIsAdmin && (
         <section className="dashboard-section ai-section">
           <div className="section-header">
             <h2>AI Insights</h2>
@@ -880,6 +893,7 @@ const Dashboard = () => {
             />
           </div>
         </section>
+        )}
       </div>
     </div>
   );

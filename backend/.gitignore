@@ -32,3 +32,6 @@ build/
 .aws-sam/
 samconfig.toml.bak
 packaged.yaml
+
+# Local user store (dev only)
+users_local.json
