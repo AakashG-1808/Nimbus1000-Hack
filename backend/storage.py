@@ -21,7 +21,7 @@ class InMemoryStorage:
         self._complaints: List[Complaint] = []
         self._risk_zones: List[RiskZone] = []
         self._daily_reports: List[DailyReport] = []
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # reentrant so resolve can call get_all_complaints inside the lock
     
     # Complaint operations
     def add_complaint(self, complaint: Complaint) -> None:
@@ -41,6 +41,15 @@ class InMemoryStorage:
                 return ts
             
             return sorted(self._complaints, key=get_timestamp, reverse=True)
+
+    def get_all_complaints_unlocked(self) -> List[Complaint]:
+        """Retrieve all complaints without acquiring the lock (caller must hold it)."""
+        def get_timestamp(complaint):
+            ts = complaint.timestamp
+            if hasattr(ts, 'tzinfo') and ts.tzinfo is not None:
+                return ts.replace(tzinfo=None)
+            return ts
+        return sorted(self._complaints, key=get_timestamp, reverse=True)
     
     def get_complaints_by_location(self, location: str) -> List[Complaint]:
         """Retrieve complaints for a specific location"""
