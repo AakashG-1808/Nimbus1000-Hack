@@ -493,29 +493,6 @@ class RiskEngine:
                 logger.info(f"Cached explanation for {area_name} / {pred.incident_type}")
         except Exception as e:
             logger.warning(f"Background explanation generation failed: {e}")
-<<<<<<< Updated upstream
-
-    def get_cached_risk_zones(self) -> List[RiskZone]:
-        """
-        Get the most recently calculated risk zones from cache.
-        Triggers a fresh calculation if cache is empty (startup race condition).
-
-        Returns:
-            List of cached risk zones
-        """
-        with self._cache_lock:
-            cache = list(self._risk_zones_cache)
-
-        if not cache:
-            try:
-                cache = self.calculate_all_risk_zones()
-            except Exception as e:
-                logger.warning(f"On-demand risk zone calculation failed: {e}")
-                cache = []
-
-        return cache
-=======
->>>>>>> Stashed changes
     
     def get_filtered_risk_zones(self, min_score: float = None) -> List[RiskZone]:
         """
