@@ -758,12 +758,12 @@ const Dashboard = () => {
           </div>
         </section>
 
-        {/* Complaint Feed Section */}
+        {/* Complaint Feed Section — tabbed pending / resolved */}
         <section className="dashboard-section feed-section">
           <div className="section-header">
-            <h2>Recent Complaints</h2>
+            <h2>Complaints</h2>
             <div className="section-meta">
-              <span className="section-badge">{Math.min(20, filteredComplaints.length)}</span>
+              <span className="section-badge">{filteredComplaints.filter(c => (c.status || 'open') === 'open').length} pending</span>
               <span className={`section-status ${isStale(complaintsState) ? 'stale' : ''}`}>
                 {complaintsState.loading && !complaintsState.lastUpdated
                   ? 'Loading...'
@@ -771,7 +771,7 @@ const Dashboard = () => {
               </span>
             </div>
           </div>
-          <div className="section-content">
+          <div className="section-content" style={{ padding: 0 }}>
             <ComplaintFeed
               complaints={filteredComplaints}
               loading={complaintsState.loading}

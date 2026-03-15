@@ -2,6 +2,7 @@
 UrbanGuard AI System - Risk Engine
 Calculates risk scores for urban zones based on complaint density, weather, and traffic
 """
+import math
 import logging
 import time
 from datetime import datetime
@@ -46,6 +47,20 @@ class RiskEngine:
     
     # Minimum risk score for API filtering
     MIN_RISK_SCORE_THRESHOLD = 10.0
+
+    # Category severity weights (base bonus points for a single complaint of this type).
+    # Higher = more inherently dangerous. Volume dampening means many low-severity
+    # complaints can still outrank a single high-severity one.
+    CATEGORY_SEVERITY = {
+        "flooding":     30,   # immediate safety risk, infrastructure damage
+        "water_supply": 25,   # public health critical
+        "construction": 20,   # safety hazard, road blockage
+        "pothole":      18,   # vehicle/pedestrian safety
+        "streetlight":  15,   # night safety risk
+        "traffic":      12,   # congestion, accident risk
+        "garbage":      10,   # health/hygiene concern
+        "noise":         7,   # quality of life, lower urgency
+    }
     
     def __init__(
         self,
@@ -85,29 +100,57 @@ class RiskEngine:
         if auto_start:
             self.start_scheduler()
     
+    def _calculate_severity_modifier(self, cluster: Cluster) -> float:
+        """
+        Calculate a severity bonus based on complaint categories and their counts.
+
+        Logic:
+        - Each category has a base severity (e.g. flooding=30, noise=7).
+        - Volume dampening: bonus = base_severity × (1 + log2(count))
+          so 1 flood  → 30 × 1.0 = 30 pts
+             2 floods → 30 × 2.0 = 60 pts
+             1 noise  →  7 × 1.0 =  7 pts
+            10 noises →  7 × 4.3 = 30 pts  (matches 1 flood at ~10 complaints)
+        - Final modifier = weighted average across all categories present,
+          capped at 40 to keep scores bounded.
+        """
+        if not cluster.complaints:
+            return 0.0
+
+        category_counts: dict = {}
+        for c in cluster.complaints:
+            category_counts[c.category] = category_counts.get(c.category, 0) + 1
+
+        total_bonus = 0.0
+        total_weight = 0.0
+        for category, count in category_counts.items():
+            base = self.CATEGORY_SEVERITY.get(category, 10)
+            volume_factor = 1.0 + math.log2(count)
+            bonus = base * volume_factor
+            total_bonus += bonus * count
+            total_weight += count
+
+        weighted_avg = total_bonus / total_weight if total_weight else 0.0
+        return min(30.0, weighted_avg)
+
     def calculate_base_score(
         self,
         complaint_density: float
     ) -> float:
         """
-        Calculate base risk score from complaint density.
+        Calculate base risk score from complaint density using a logarithmic curve.
         
-        Args:
-            complaint_density: Complaints per square kilometer
-            
-        Returns:
-            Base score (0-100)
+        Uses log scaling so scores don't instantly peg at 100 with dense simulated data.
+        - density 1/km²  → ~15 pts
+        - density 5/km²  → ~35 pts
+        - density 10/km² → ~45 pts
+        - density 50/km² → ~65 pts  (hard cap via min)
         """
-        # Scale: density of 5/km² → 50 points, 10/km² → 75, 20/km² → 100
-        if complaint_density >= self.HIGH_DENSITY_THRESHOLD:
-            base_score = self.HIGH_DENSITY_BONUS
-            excess_density = complaint_density - self.HIGH_DENSITY_THRESHOLD
-            base_score += excess_density * 5
-        else:
-            # Linear scale up to threshold: 0 → 0, 5 → 50
-            base_score = complaint_density * (self.HIGH_DENSITY_BONUS / self.HIGH_DENSITY_THRESHOLD)
-
-        return max(0.0, min(100.0, base_score))
+        if complaint_density <= 0:
+            return 0.0
+        # log2 scaling: grows fast at low density, flattens at high density
+        base_score = 15.0 * math.log2(1 + complaint_density)
+        return max(0.0, min(65.0, base_score))
     
     def calculate_risk_score(
         self,
@@ -122,6 +165,9 @@ class RiskEngine:
         # Calculate base score from complaint density
         base_score = self.calculate_base_score(cluster.density_per_km2)
         risk_score = base_score
+
+        # Apply category severity modifier (balances type priority vs volume)
+        risk_score += self._calculate_severity_modifier(cluster)
 
         # Apply weather modifier
         if weather:

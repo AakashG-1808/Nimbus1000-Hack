@@ -65,7 +65,7 @@ const AIInsightsPanel = ({ dailyReport = null, complaints = [], loading = false,
   return (
     <div className="ai-insights-panel">
       {/* Classification Method Status */}
-      <div className="ai-section">
+      <div className="ai-section engine-section">
         <h3 className="ai-section-title">Classification Engine</h3>
         <div className={`ai-method-badge ${classificationMethod}`}>
           <span className="method-dot"></span>
@@ -120,7 +120,7 @@ const AIInsightsPanel = ({ dailyReport = null, complaints = [], loading = false,
       )}
 
       {/* Daily Report Summary */}
-      <div className="ai-section">
+      <div className="ai-section report-section">
         <h3 className="ai-section-title">Daily AI Report</h3>
         {error && !dailyReport ? (
           <p className="report-error">{error}</p>

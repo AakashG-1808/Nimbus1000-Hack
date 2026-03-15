@@ -182,6 +182,11 @@
   height: 62vh;
 }
 
+.resolved-count {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
 .weather-section {
   grid-column: 1 / 4;
   grid-row: 3;
