@@ -529,6 +529,17 @@ async def report_complaint(
         )
         
         if result.success:
+            # Trigger immediate cluster + risk zone recalculation so the map updates right away
+            try:
+                from cluster_detector import get_cluster_detector
+                from risk_engine import get_risk_engine
+                cd = get_cluster_detector()
+                cd.recalculate_clusters()
+                re = get_risk_engine()
+                re.calculate_all_risk_zones()
+            except Exception:
+                pass  # Don't fail the submission if recalculation fails
+
             # Broadcast new complaint via WebSocket
             try:
                 coords = precise_coords or BENGALURU_LOCATIONS.get(location, (12.9716, 77.5946))
