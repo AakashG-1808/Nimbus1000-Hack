@@ -356,6 +356,56 @@ For production deployment, see:
 - Build frontend for production: `npm run build`
 - Use production ASGI server (Gunicorn + Uvicorn workers)
 
+## Using DynamoDB for Persistent Storage
+
+By default the backend uses **in-memory storage** (data is lost on restart). To persist data to **Amazon DynamoDB** set the following environment variables in `backend/.env`:
+
+```env
+USE_DYNAMODB=true
+
+# AWS credentials
+AWS_REGION=ap-south-2
+AWS_ACCESS_KEY_ID=<your-key>
+AWS_SECRET_ACCESS_KEY=<your-secret>
+
+# Table names (these match the SAM template defaults)
+DYNAMODB_TABLE_COMPLAINTS=urbanguard-complaints
+DYNAMODB_TABLE_RISK_ZONES=urbanguard-risk-zones
+DYNAMODB_TABLE_REPORTS=urbanguard-reports
+DYNAMODB_TABLE_USERS=urbanguard-users
+```
+
+Tables must already exist in your AWS account. Deploy them in one step with AWS SAM:
+
+```bash
+cd backend
+sam build
+sam deploy --guided
+```
+
+### Local Development with DynamoDB Local
+
+You can run DynamoDB locally (no AWS account required):
+
+1. Download [DynamoDB Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html)
+2. Start it: `java -jar DynamoDBLocal.jar -sharedDb -port 8001`
+3. Create the four tables (see `STORAGE_README.md` for the exact CLI commands)
+4. Add to `backend/.env`:
+   ```env
+   USE_DYNAMODB=true
+   DYNAMODB_ENDPOINT_URL=http://localhost:8001
+   AWS_REGION=us-east-1
+   AWS_ACCESS_KEY_ID=dummy
+   AWS_SECRET_ACCESS_KEY=dummy
+   DYNAMODB_TABLE_COMPLAINTS=urbanguard-complaints
+   DYNAMODB_TABLE_RISK_ZONES=urbanguard-risk-zones
+   DYNAMODB_TABLE_REPORTS=urbanguard-reports
+   DYNAMODB_TABLE_USERS=urbanguard-users
+   ```
+5. Start the backend: `python -m uvicorn main:app --reload --port 8000`
+
+See `backend/STORAGE_README.md` for full details on the DynamoDB integration.
+
 ## Getting Help
 
 - **API Documentation**: http://localhost:8000/docs

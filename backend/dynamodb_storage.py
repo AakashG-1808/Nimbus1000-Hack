@@ -31,9 +31,16 @@ class DynamoDBStorage:
     def __init__(self):
         """Initialize DynamoDB client and table names from environment variables"""
         self.region = os.environ.get("AWS_REGION", "ap-south-2")
-        
+
+        # Optional custom endpoint for DynamoDB Local
+        # Set DYNAMODB_ENDPOINT_URL=http://localhost:8001 to use DynamoDB Local
+        endpoint_url = os.environ.get("DYNAMODB_ENDPOINT_URL")
+
         # Initialize DynamoDB client
-        self.dynamodb = boto3.resource('dynamodb', region_name=self.region)
+        kwargs = {"region_name": self.region}
+        if endpoint_url:
+            kwargs["endpoint_url"] = endpoint_url
+        self.dynamodb = boto3.resource('dynamodb', **kwargs)
         
         # Get table names from environment variables
         self.complaints_table_name = os.environ.get(
@@ -260,7 +267,8 @@ class DynamoDBStorage:
         """Retrieve complaints for a specific location"""
         try:
             response = self.complaints_table.scan(
-                FilterExpression="location = :loc",
+                FilterExpression="#loc = :loc",
+                ExpressionAttributeNames={"#loc": "location"},
                 ExpressionAttributeValues={":loc": location}
             )
             items = response.get('Items', [])
@@ -277,7 +285,8 @@ class DynamoDBStorage:
         """Retrieve complaints of a specific category"""
         try:
             response = self.complaints_table.scan(
-                FilterExpression="category = :cat",
+                FilterExpression="#cat = :cat",
+                ExpressionAttributeNames={"#cat": "category"},
                 ExpressionAttributeValues={":cat": category}
             )
             items = response.get('Items', [])
@@ -475,11 +484,14 @@ class DynamoDBStorage:
                 for item in response.get('Items', []):
                     batch.delete_item(Key={'zone_id': item['zone_id']})
             
-            # Clear reports
+            # Clear reports (composite key: report_id + date)
             response = self.reports_table.scan()
             with self.reports_table.batch_writer() as batch:
                 for item in response.get('Items', []):
-                    batch.delete_item(Key={'report_id': item['report_id']})
+                    batch.delete_item(Key={
+                        'report_id': item['report_id'],
+                        'date': item['date']
+                    })
                     
         except ClientError as e:
             log_error(
