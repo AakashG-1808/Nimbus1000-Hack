@@ -30,7 +30,7 @@ class IncidentPredictor:
     """
     
     # Risk score threshold for generating predictions
-    PREDICTION_THRESHOLD = 70.0
+    PREDICTION_THRESHOLD = 25.0
     
     def __init__(self):
         """Initialize Incident Predictor."""
@@ -72,7 +72,7 @@ class IncidentPredictor:
         ]
         
         if not high_risk_zones:
-            logger.info("No high-risk zones (score > 70) found for incident prediction")
+            logger.info("No high-risk zones (score > 25) found for incident prediction")
             return predictions
         
         logger.info(f"Generating predictions for {len(high_risk_zones)} high-risk zones")
@@ -218,7 +218,7 @@ class IncidentPredictor:
             
         Note: This is part of task 8.2, but included here for completeness
         """
-        if risk_score > 85:
+        if risk_score > 50:
             return "next 6 hours"
         else:
             return "next 24 hours"

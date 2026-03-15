@@ -1,0 +1,25 @@
+
+	Managed S3 bucket: aws-sam-cli-managed-default-samclisourcebucket-635xl1jp6eae
+	Auto resolution of buckets can be turned off by setting resolve_s3=False
+	To use a specific S3 bucket, set --s3-bucket=<bucket_name>
+	Above settings can be stored in samconfig.toml
+
+	File with same data already exists at e25979d16dade3fe7805737aedf21ff0, skipping upload
+
+	Deploying with following values
+	===============================
+	Stack name                   : urbanguard-ai-backend
+	Region                       : us-east-1
+	Confirm changeset            : True
+	Disable rollback             : False
+	Deployment s3 bucket         : aws-sam-cli-managed-default-samclisourcebucket-635xl1jp6eae
+	Capabilities                 : ["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"]
+	Parameter overrides          : {"Environment": "dev"}
+	Signing Profiles             : {}
+
+Initiating deployment
+=====================
+
+
+	File with same data already exists at 094cf4530ce32502d68a27e0570bb6ed.template, skipping upload
+Error: Failed to create changeset for the stack: urbanguard-ai-backend, An error occurred (ValidationError) when calling the CreateChangeSet operation: Stack:arn:aws:cloudformation:us-east-1:707859599311:stack/urbanguard-ai-backend/75584c40-1fa2-11f1-856c-0e124f123293 is in ROLLBACK_COMPLETE state and can not be updated.

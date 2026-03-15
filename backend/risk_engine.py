@@ -35,7 +35,7 @@ class RiskEngine:
     
     # Risk score thresholds
     HIGH_DENSITY_THRESHOLD = 5.0  # complaints per km²
-    HIGH_DENSITY_BONUS = 20  # points added for high density
+    HIGH_DENSITY_BONUS = 50  # points at threshold (density=5 → score=50)
     
     # Risk level classification thresholds
     LOW_RISK_MAX = 33
@@ -45,7 +45,7 @@ class RiskEngine:
     RECALCULATION_INTERVAL = 900
     
     # Minimum risk score for API filtering
-    MIN_RISK_SCORE_THRESHOLD = 20.0
+    MIN_RISK_SCORE_THRESHOLD = 10.0
     
     def __init__(
         self,
@@ -73,6 +73,10 @@ class RiskEngine:
         # Cache for latest risk zones
         self._risk_zones_cache: List[RiskZone] = []
         self._cache_lock = Lock()
+
+        # Cache for AI-generated prediction explanations keyed by zone_id+incident_type
+        self._explanation_cache: dict = {}
+        self._explanation_lock = Lock()
         
         # Background scheduler state
         self._scheduler_thread: Optional[Thread] = None
@@ -93,28 +97,17 @@ class RiskEngine:
             
         Returns:
             Base score (0-100)
-            
-        Logic:
-            - If density >= 5 per km²: add 20 points
-            - Otherwise: density * 4 (scales linearly up to threshold)
-            - Capped at 100
-            
-        Validates: Requirements 7.1, 7.2, 7.3
         """
+        # Scale: density of 5/km² → 50 points, 10/km² → 75, 20/km² → 100
         if complaint_density >= self.HIGH_DENSITY_THRESHOLD:
-            # High density: add bonus points
             base_score = self.HIGH_DENSITY_BONUS
-            # Add additional points for density above threshold
             excess_density = complaint_density - self.HIGH_DENSITY_THRESHOLD
-            base_score += excess_density * 4
+            base_score += excess_density * 5
         else:
-            # Below threshold: scale linearly
-            base_score = complaint_density * 4
-        
-        # Ensure bounded 0-100
-        base_score = max(0.0, min(100.0, base_score))
-        
-        return base_score
+            # Linear scale up to threshold: 0 → 0, 5 → 50
+            base_score = complaint_density * (self.HIGH_DENSITY_BONUS / self.HIGH_DENSITY_THRESHOLD)
+
+        return max(0.0, min(100.0, base_score))
     
     def calculate_risk_score(
         self,
@@ -400,6 +393,9 @@ class RiskEngine:
         # Update cache
         with self._cache_lock:
             self._risk_zones_cache = risk_zones
+
+        # Kick off background explanation generation (non-blocking)
+        Thread(target=self._generate_explanations_background, args=(risk_zones,), daemon=True).start()
         
         # Update storage if callback provided
         if self.update_risk_zones_callback:
@@ -417,15 +413,91 @@ class RiskEngine:
         
         return risk_zones
     
-    def get_cached_risk_zones(self) -> List[RiskZone]:
+    def get_explanation(self, zone_id: str, incident_type: str) -> Optional[str]:
+        """Return cached AI explanation for a prediction, or None if not ready yet."""
+        key = f"{zone_id}:{incident_type}"
+        with self._explanation_lock:
+            return self._explanation_cache.get(key)
+
+    def _generate_explanations_background(self, zones: List[RiskZone]) -> None:
+        """Generate Bedrock explanations for all zones in a background thread."""
+        try:
+            from ai_classifier import AIClassifier
+            from incident_predictor import get_incident_predictor
+            from weather_integrator import get_weather_integrator
+            from traffic_analyzer import get_traffic_analyzer
+
+            BENGALURU_AREAS = [
+                {"name": "Koramangala", "lat": 12.9352, "lng": 77.6245},
+                {"name": "Indiranagar", "lat": 12.9784, "lng": 77.6408},
+                {"name": "Whitefield", "lat": 12.9698, "lng": 77.7499},
+                {"name": "Electronic City", "lat": 12.8399, "lng": 77.6770},
+                {"name": "Marathahalli", "lat": 12.9591, "lng": 77.6974},
+                {"name": "HSR Layout", "lat": 12.9116, "lng": 77.6389},
+                {"name": "BTM Layout", "lat": 12.9166, "lng": 77.6101},
+                {"name": "Jayanagar", "lat": 12.9308, "lng": 77.5838},
+                {"name": "Banashankari", "lat": 12.9255, "lng": 77.5468},
+                {"name": "Rajajinagar", "lat": 12.9907, "lng": 77.5530},
+                {"name": "Malleshwaram", "lat": 13.0035, "lng": 77.5710},
+                {"name": "Hebbal", "lat": 13.0350, "lng": 77.5970},
+                {"name": "Yelahanka", "lat": 13.1007, "lng": 77.5963},
+                {"name": "Bannerghatta", "lat": 12.8635, "lng": 77.5975},
+                {"name": "Vijayanagar", "lat": 12.9719, "lng": 77.5322},
+                {"name": "Yeshwanthpur", "lat": 13.0280, "lng": 77.5390},
+                {"name": "JP Nagar", "lat": 12.9063, "lng": 77.5857},
+                {"name": "Bellandur", "lat": 12.9257, "lng": 77.6762},
+                {"name": "KR Puram", "lat": 13.0050, "lng": 77.6960},
+                {"name": "City Center", "lat": 12.9716, "lng": 77.5946},
+            ]
+
+            def nearest_area(lat, lng):
+                return min(BENGALURU_AREAS, key=lambda a: (a["lat"]-lat)**2 + (a["lng"]-lng)**2)["name"]
+
+            classifier = AIClassifier()
+            predictor = get_incident_predictor()
+            weather = get_weather_integrator().fetch_weather_data()
+            traffic = get_traffic_analyzer().get_all_traffic_data()
+            predictions = predictor.predict_incidents(zones, weather, traffic)
+
+            for pred in predictions:
+                zone = next((z for z in zones if z.zone_id == pred.zone_id), None)
+                if not zone:
+                    continue
+                lat, lng = zone.center_coordinates
+                area_name = nearest_area(lat, lng)
+                key = f"{pred.zone_id}:{pred.incident_type}"
+                explanation = classifier.explain_prediction(
+                    incident_type=pred.incident_type,
+                    area_name=area_name,
+                    risk_score=pred.risk_score,
+                    dominant_category=zone.dominant_category,
+                    complaint_count=zone.complaint_count,
+                    contributing_factors=pred.contributing_factors,
+                    time_window=pred.time_window,
+                )
+                with self._explanation_lock:
+                    self._explanation_cache[key] = explanation
+                logger.info(f"Cached explanation for {area_name} / {pred.incident_type}")
+        except Exception as e:
+            logger.warning(f"Background explanation generation failed: {e}")
         """
         Get the most recently calculated risk zones from cache.
+        Triggers a fresh calculation if cache is empty (startup race condition).
         
         Returns:
             List of cached risk zones
         """
         with self._cache_lock:
-            return self._risk_zones_cache.copy()
+            cache = list(self._risk_zones_cache)
+
+        if not cache:
+            try:
+                cache = self.calculate_all_risk_zones()
+            except Exception as e:
+                logger.warning(f"On-demand risk zone calculation failed: {e}")
+                cache = []
+
+        return cache
     
     def get_filtered_risk_zones(self, min_score: float = None) -> List[RiskZone]:
         """
@@ -443,10 +515,17 @@ class RiskEngine:
             min_score = self.MIN_RISK_SCORE_THRESHOLD
         
         with self._cache_lock:
-            return [
-                zone for zone in self._risk_zones_cache
-                if zone.risk_score > min_score
-            ]
+            cache = list(self._risk_zones_cache)
+
+        # If cache is empty (startup race), trigger a fresh calculation now
+        if not cache:
+            try:
+                cache = self.calculate_all_risk_zones()
+            except Exception as e:
+                logger.warning(f"On-demand risk zone calculation failed: {e}")
+                cache = []
+
+        return [zone for zone in cache if zone.risk_score > min_score]
     
     def start_scheduler(self) -> None:
         """

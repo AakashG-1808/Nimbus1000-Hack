@@ -1,17 +1,22 @@
 import axios from 'axios';
+import { getToken, logout } from './auth';
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+  baseURL: (process.env.REACT_APP_API_URL || 'http://localhost:8000') + '/api/v1',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor for logging
+// Request interceptor for logging and auth
 api.interceptors.request.use(
   (config) => {
+    const token = getToken();
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
     console.log(`API Request: ${config.method.toUpperCase()} ${config.url}`);
     return config;
   },
@@ -30,6 +35,10 @@ api.interceptors.response.use(
     if (error.response) {
       // Server responded with error status
       console.error('API Error Response:', error.response.status, error.response.data);
+      if (error.response.status === 401) {
+        logout();
+        window.location.href = '/login';
+      }
     } else if (error.request) {
       // Request made but no response received
       console.error('API No Response:', error.request);
@@ -87,4 +96,116 @@ export const trafficAPI = {
   },
 };
 
+export const predictionsAPI = {
+  // Get incident predictions
+  getPredictions: () => {
+    return api.get('/predictions');
+  },
+};
+
+// WebSocket service for real-time updates
+export const websocketAPI = (() => {
+  let ws = null;
+  let messageCallbacks = [];
+  let statusCallbacks = [];
+  let reconnectTimer = null;
+  let reconnectDelay = 1000;
+  const MAX_RECONNECT_DELAY = 30000;
+  let intentionalClose = false;
+
+  const getWsUrl = () => {
+    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    return baseUrl.replace(/^http/, 'ws') + '/ws';
+  };
+
+  const notifyStatus = (status) => {
+    statusCallbacks.forEach(cb => {
+      try { cb(status); } catch (e) { console.error('WS status callback error:', e); }
+    });
+  };
+
+  const connect = () => {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    intentionalClose = false;
+    const url = getWsUrl();
+    console.log('WebSocket connecting to:', url);
+
+    try {
+      ws = new WebSocket(url);
+    } catch (e) {
+      console.error('WebSocket creation failed:', e);
+      scheduleReconnect();
+      return;
+    }
+
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      reconnectDelay = 1000; // Reset backoff
+      notifyStatus('connected');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        messageCallbacks.forEach(cb => {
+          try { cb(data); } catch (e) { console.error('WS message callback error:', e); }
+        });
+      } catch (e) {
+        console.error('WebSocket message parse error:', e);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      notifyStatus('disconnected');
+      if (!intentionalClose) {
+        scheduleReconnect();
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+  };
+
+  const scheduleReconnect = () => {
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    console.log(`WebSocket reconnecting in ${reconnectDelay / 1000}s...`);
+    reconnectTimer = setTimeout(() => {
+      reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
+      connect();
+    }, reconnectDelay);
+  };
+
+  const disconnect = () => {
+    intentionalClose = true;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (ws) {
+      ws.close();
+      ws = null;
+    }
+    notifyStatus('disconnected');
+  };
+
+  const onMessage = (callback) => {
+    messageCallbacks.push(callback);
+    return () => {
+      messageCallbacks = messageCallbacks.filter(cb => cb !== callback);
+    };
+  };
+
+  const onStatusChange = (callback) => {
+    statusCallbacks.push(callback);
+    return () => {
+      statusCallbacks = statusCallbacks.filter(cb => cb !== callback);
+    };
+  };
+
+  return { connect, disconnect, onMessage, onStatusChange };
+})();
+
 export default api;
+

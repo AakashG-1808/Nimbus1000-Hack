@@ -30,7 +30,7 @@ class DynamoDBStorage:
     
     def __init__(self):
         """Initialize DynamoDB client and table names from environment variables"""
-        self.region = os.environ.get("AWS_REGION", "us-east-1")
+        self.region = os.environ.get("AWS_REGION", "ap-south-2")
         
         # Initialize DynamoDB client
         self.dynamodb = boto3.resource('dynamodb', region_name=self.region)

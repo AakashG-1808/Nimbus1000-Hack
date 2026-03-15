@@ -1,154 +1,179 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { complaintsAPI } from '../services/api';
+import LocationPicker from './LocationPicker';
 import './ComplaintForm.css';
 
+const categories = [
+  { value: 'pothole', label: 'Pothole' },
+  { value: 'flooding', label: 'Flooding' },
+  { value: 'traffic', label: 'Traffic' },
+  { value: 'garbage', label: 'Garbage' },
+  { value: 'streetlight', label: 'Street Light' },
+  { value: 'water_supply', label: 'Water Supply' },
+  { value: 'noise', label: 'Noise' },
+  { value: 'construction', label: 'Construction' },
+];
+
 /**
- * ComplaintForm component for submitting citizen complaints
- * 
- * Features:
- * - Location dropdown (40+ Bengaluru locations)
- * - Category dropdown (8 supported categories)
- * - Description textarea
- * - Form validation
- * - Success/error message display
- * - Triggers dashboard refresh on successful submission
- * 
- * Validates: Requirements 1.1, 12.2
+ * LocationSearch — free-text address search with Nominatim autocomplete.
+ * Restricts results to Bengaluru bounding box for relevance.
+ */
+const BENGALURU_VIEWBOX = '77.4601,12.8340,77.7840,13.1390';
+
+function LocationSearch({ value, coords, onChange, disabled }) {
+  const [query, setQuery] = useState(value || '');
+  const [suggestions, setSuggestions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef(null);
+  const wrapperRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setSuggestions([]);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const search = useCallback(async (q) => {
+    if (q.trim().length < 3) { setSuggestions([]); return; }
+    setLoading(true);
+    try {
+      // Use structured query: street/place + city fixed to Bengaluru
+      // bounded=0 so specific places (apartments, streets) aren't excluded
+      // viewbox still biases results toward Bengaluru without hard-cutting
+      const url = `https://nominatim.openstreetmap.org/search?` +
+        `q=${encodeURIComponent(q)},Bengaluru` +
+        `&format=json&limit=8&countrycodes=in&addressdetails=1` +
+        `&viewbox=${BENGALURU_VIEWBOX}&bounded=0`;
+      const res = await fetch(url, {
+        headers: { 'Accept-Language': 'en', 'User-Agent': 'UrbanGuardAI/1.0' },
+      });
+      const data = await res.json();
+      // Filter to results that are actually in/near Bengaluru
+      const filtered = data.filter(item => {
+        const addr = item.address || {};
+        const city = (addr.city || addr.town || addr.county || '').toLowerCase();
+        return city.includes('bengaluru') || city.includes('bangalore') ||
+          item.display_name.toLowerCase().includes('bengaluru') ||
+          item.display_name.toLowerCase().includes('bangalore');
+      });
+      setSuggestions(filtered.length > 0 ? filtered : data.slice(0, 5));
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleInput = (e) => {
+    const q = e.target.value;
+    setQuery(q);
+    // Clear confirmed selection if user edits
+    onChange('', null);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => search(q), 350);
+  };
+
+  const handleSelect = (item) => {
+    const parts = item.display_name.split(',').map(p => p.trim());
+    const label = parts.slice(0, 3).join(', ');
+    setQuery(label);
+    setSuggestions([]);
+    onChange(label, { lat: parseFloat(item.lat), lng: parseFloat(item.lon) });
+  };
+
+  return (
+    <div className="location-search-wrapper" ref={wrapperRef}>
+      <input
+        type="text"
+        className="location-search-input"
+        placeholder="Type your area, e.g. Electronic City Phase 2"
+        value={query}
+        onChange={handleInput}
+        disabled={disabled}
+        autoComplete="off"
+      />
+      {coords && (
+        <span className="location-confirmed" title="Location confirmed">✓ pinned</span>
+      )}
+      {loading && <span className="location-loading">Searching…</span>}
+      {suggestions.length > 0 && (
+        <ul className="location-suggestions">
+          {suggestions.map((s) => {
+            // Show short name + neighbourhood context, not the full address string
+            const parts = s.display_name.split(',').map(p => p.trim());
+            const short = parts.slice(0, 3).join(', ');
+            const context = parts.slice(3, 5).join(', ');
+            return (
+              <li key={s.place_id} onMouseDown={() => handleSelect(s)}>
+                <span className="suggestion-main">{short}</span>
+                {context && <span className="suggestion-sub">{context}</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * ComplaintForm — submit a civic complaint with precise geocoded location.
  */
 const ComplaintForm = ({ onSubmitStart, onSubmitSuccess, onSubmitError }) => {
-  // Form state
-  const [formData, setFormData] = useState({
-    location: '',
-    category: '',
-    description: '',
-  });
-
-  // UI state
+  const [location, setLocation] = useState('');
+  const [locationCoords, setLocationCoords] = useState(null);
+  const [locationMode, setLocationMode] = useState('search'); // 'search' | 'map'
+  const [category, setCategory] = useState('');
+  const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
-  const [messageType, setMessageType] = useState(null); // 'success' or 'error'
+  const [messageType, setMessageType] = useState(null);
   const [lastPayload, setLastPayload] = useState(null);
   const [showRetry, setShowRetry] = useState(false);
 
-  // Bengaluru locations (40+ locations)
-  const locations = [
-    "Koramangala", "Indiranagar", "Whitefield", "Electronic City",
-    "Jayanagar", "Malleshwaram", "HSR Layout", "BTM Layout",
-    "Marathahalli", "Bannerghatta Road", "Yelahanka", "Hebbal",
-    "Rajajinagar", "Basavanagudi", "JP Nagar", "Sarjapur Road",
-    "Bellandur", "Bommanahalli", "Mahadevapura", "Yeshwanthpur",
-    "KR Puram", "Ramamurthy Nagar", "CV Raman Nagar", "Hoodi",
-    "Varthur", "Kadugodi", "Brookefield", "Domlur",
-    "Ulsoor", "Frazer Town", "Richmond Town", "Shivajinagar",
-    "Sadashivanagar", "Vijayanagar", "Peenya", "Jalahalli",
-    "Nagarbhavi", "Kengeri", "Banashankari", "Girinagar",
-    "Uttarahalli", "Rajarajeshwari Nagar", "Chickpet", "Shantinagar"
-  ];
+  const clearMessage = () => { setMessage(null); setMessageType(null); setShowRetry(false); };
 
-  // Complaint categories (8 supported types)
-  const categories = [
-    { value: 'pothole', label: 'Pothole' },
-    { value: 'flooding', label: 'Flooding' },
-    { value: 'traffic', label: 'Traffic' },
-    { value: 'garbage', label: 'Garbage' },
-    { value: 'streetlight', label: 'Street Light' },
-    { value: 'water_supply', label: 'Water Supply' },
-    { value: 'noise', label: 'Noise' },
-    { value: 'construction', label: 'Construction' },
-  ];
-
-  // Handle input changes
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    // Clear message when user starts typing
-    if (message) {
-      setMessage(null);
-      setMessageType(null);
-      setShowRetry(false);
-    }
+  const handleLocationChange = (label, coords) => {
+    setLocation(label);
+    setLocationCoords(coords);
+    clearMessage();
   };
 
-  // Validate form
-  const validateForm = () => {
-    if (!formData.location) {
-      setMessage('Please select a location');
-      setMessageType('error');
-      return false;
+  const validate = () => {
+    if (!location.trim()) {
+      setMessage('Please enter and select a location'); setMessageType('error'); return false;
     }
-    if (!formData.category) {
-      setMessage('Please select a category');
-      setMessageType('error');
-      return false;
+    if (!locationCoords) {
+      setMessage('Please select a location from the suggestions'); setMessageType('error'); return false;
     }
-    if (!formData.description.trim()) {
-      setMessage('Please provide a description');
-      setMessageType('error');
-      return false;
+    if (!category) {
+      setMessage('Please select a category'); setMessageType('error'); return false;
     }
-    if (formData.description.trim().length < 10) {
-      setMessage('Description must be at least 10 characters');
-      setMessageType('error');
-      return false;
+    if (description.trim().length < 10) {
+      setMessage('Description must be at least 10 characters'); setMessageType('error'); return false;
     }
     return true;
   };
 
-  // Handle form submission
-  const submitComplaint = async (complaintData) => {
+  const submitComplaint = async (payload) => {
     setIsSubmitting(true);
-    setMessage(null);
-    setMessageType(null);
-    setShowRetry(false);
-
-    if (onSubmitStart) {
-      onSubmitStart();
-    }
-
+    clearMessage();
+    if (onSubmitStart) onSubmitStart();
     try {
-      await complaintsAPI.submitComplaint(complaintData);
-
-      // Show success message
+      await complaintsAPI.submitComplaint(payload);
       setMessage('Complaint submitted successfully!');
       setMessageType('success');
-      setShowRetry(false);
-
-      // Reset form only for non-retry submissions
-      setFormData({
-        location: '',
-        category: '',
-        description: '',
-      });
-
-      if (onSubmitSuccess) {
-        setTimeout(() => {
-          onSubmitSuccess();
-        }, 800);
-      }
+      setLocation(''); setLocationCoords(null); setCategory(''); setDescription('');
+      if (onSubmitSuccess) setTimeout(onSubmitSuccess, 800);
     } catch (error) {
-      console.error('Error submitting complaint:', error);
-
-      let errorMessage = 'Failed to submit complaint. Please try again.';
-
-      if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail;
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = `Error: ${error.message}`;
-      }
-
-      setMessage(errorMessage);
-      setMessageType('error');
-      setShowRetry(true);
-      setLastPayload(complaintData);
-
-      if (onSubmitError) {
-        onSubmitError(errorMessage);
-      }
+      const msg = error.response?.data?.detail || error.message || 'Failed to submit complaint.';
+      setMessage(msg); setMessageType('error'); setShowRetry(true); setLastPayload(payload);
+      if (onSubmitError) onSubmitError(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -156,27 +181,16 @@ const ComplaintForm = ({ onSubmitStart, onSubmitSuccess, onSubmitError }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    const complaintData = {
-      location: formData.location,
-      category: formData.category,
-      description: formData.description.trim(),
+    if (!validate()) return;
+    const payload = {
+      location: location.trim(),
+      category,
+      description: description.trim(),
       timestamp: new Date().toISOString(),
+      coordinates: locationCoords,
     };
-
-    setLastPayload(complaintData);
-    await submitComplaint(complaintData);
-  };
-
-  const handleRetry = async () => {
-    if (!lastPayload) {
-      return;
-    }
-    await submitComplaint(lastPayload);
+    setLastPayload(payload);
+    await submitComplaint(payload);
   };
 
   return (
@@ -187,94 +201,95 @@ const ComplaintForm = ({ onSubmitStart, onSubmitSuccess, onSubmitError }) => {
       </p>
 
       <form onSubmit={handleSubmit} className="complaint-form">
-        {/* Location dropdown */}
         <div className="form-group">
           <label htmlFor="location">
             Location <span className="required">*</span>
           </label>
-          <select
-            id="location"
-            name="location"
-            value={formData.location}
-            onChange={handleChange}
-            disabled={isSubmitting}
-            required
-          >
-            <option value="">Select a location</option>
-            {locations.map(location => (
-              <option key={location} value={location}>
-                {location}
-              </option>
-            ))}
-          </select>
+
+          {/* Toggle between text search and map picker */}
+          <div className="location-mode-toggle">
+            <button
+              type="button"
+              className={`mode-btn ${locationMode === 'search' ? 'active' : ''}`}
+              onClick={() => setLocationMode('search')}
+            >
+              🔍 Search
+            </button>
+            <button
+              type="button"
+              className={`mode-btn ${locationMode === 'map' ? 'active' : ''}`}
+              onClick={() => setLocationMode('map')}
+            >
+              🗺 Pick on Map
+            </button>
+          </div>
+
+          {locationMode === 'search' ? (
+            <LocationSearch
+              value={location}
+              coords={locationCoords}
+              onChange={handleLocationChange}
+              disabled={isSubmitting}
+            />
+          ) : (
+            <LocationPicker
+              onSelect={(label, coords) => {
+                handleLocationChange(label, coords);
+                setLocationMode('search'); // switch back to show confirmed address
+              }}
+            />
+          )}
         </div>
 
-        {/* Category dropdown */}
         <div className="form-group">
           <label htmlFor="category">
             Category <span className="required">*</span>
           </label>
           <select
             id="category"
-            name="category"
-            value={formData.category}
-            onChange={handleChange}
+            value={category}
+            onChange={(e) => { setCategory(e.target.value); clearMessage(); }}
             disabled={isSubmitting}
             required
           >
             <option value="">Select a category</option>
-            {categories.map(cat => (
-              <option key={cat.value} value={cat.value}>
-                {cat.label}
-              </option>
+            {categories.map(c => (
+              <option key={c.value} value={c.value}>{c.label}</option>
             ))}
           </select>
         </div>
 
-        {/* Description textarea */}
         <div className="form-group">
           <label htmlFor="description">
             Description <span className="required">*</span>
           </label>
           <textarea
             id="description"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
+            value={description}
+            onChange={(e) => { setDescription(e.target.value); clearMessage(); }}
             placeholder="Describe the issue in detail..."
             rows="4"
             disabled={isSubmitting}
             required
           />
-          <div className="char-count">
-            {formData.description.length} characters
-          </div>
+          <div className="char-count">{description.length} characters</div>
         </div>
 
-        {/* Message display */}
         {message && (
           <div className={`form-message ${messageType}`}>
             <span>{messageType === 'success' ? '✓ ' : '✗ '}{message}</span>
             {showRetry && (
-              <button
-                type="button"
-                className="retry-button"
-                onClick={handleRetry}
-                disabled={isSubmitting}
-              >
+              <button type="button" className="retry-button"
+                onClick={() => lastPayload && submitComplaint(lastPayload)}
+                disabled={isSubmitting}>
                 Retry
               </button>
             )}
           </div>
         )}
 
-        {/* Submit button */}
-        <button
-          type="submit"
-          className="submit-button"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? 'Submitting...' : 'Submit Complaint'}
+        <button type="submit" className="submit-button" disabled={isSubmitting}>
+          {isSubmitting ? 'Submitting…' : 'Submit Complaint'}
         </button>
       </form>
     </div>

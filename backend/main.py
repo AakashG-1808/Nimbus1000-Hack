@@ -7,11 +7,15 @@ import os
 from datetime import datetime
 from typing import Optional
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException, Query
+from fastapi import FastAPI, Request, HTTPException, Query, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi import APIRouter
 from storage import storage
 from simulated_data import initialize_storage_with_simulated_data
 from weather_integrator import get_weather_integrator
@@ -24,9 +28,49 @@ from constants import BENGALURU_LOCATIONS, COMPLAINT_CATEGORIES
 
 load_dotenv()
 
+# Rate limiter setup
+limiter = Limiter(key_func=get_remote_address)
+
+# API Router setup
+api_router = APIRouter(prefix="/api/v1")
+
 
 # Initialize request logger
 request_logger = RequestLogger(component="API")
+
+
+# ============================================================================
+# WebSocket Connection Manager
+# ============================================================================
+
+class ConnectionManager:
+    """Manages WebSocket connections for real-time updates."""
+    
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+    
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+    
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+    
+    async def broadcast(self, message: dict):
+        """Send message to all connected clients."""
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                disconnected.append(connection)
+        # Clean up dead connections
+        for conn in disconnected:
+            self.disconnect(conn)
+
+
+ws_manager = ConnectionManager()
 
 
 class ComplaintSubmission(BaseModel):
@@ -35,6 +79,7 @@ class ComplaintSubmission(BaseModel):
     category: str = Field(..., min_length=1, description="Complaint category")
     description: str = Field(..., min_length=1, description="Complaint description")
     timestamp: Optional[datetime] = Field(default=None, description="ISO 8601 timestamp")
+    coordinates: Optional[dict] = Field(default=None, description="Precise lat/lng from geocoding")
 
     @field_validator("description")
     @classmethod
@@ -131,6 +176,8 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS configuration for frontend access
 app.add_middleware(
@@ -229,27 +276,130 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time dashboard updates."""
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive, listen for any client messages
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception:
+        ws_manager.disconnect(websocket)
+
+
 @app.get("/")
 async def root():
     return {
         "message": "UrbanGuard AI System API",
         "complaint_count": storage.get_complaint_count(),
-        "status": "running"
+        "status": "running",
+        "websocket": "/ws"
     }
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    # Verify Bedrock is truly usable by making a lightweight API call
+    # boto3.client() and even credential checks pass even without Bedrock access
+    bedrock_active = False
+    try:
+        import boto3, json as _json, os as _os
+        from botocore.config import Config as _Config
+        aws_region = _os.getenv("AWS_BEDROCK_REGION", _os.getenv("AWS_REGION", "ap-south-2"))
+        model_id = _os.getenv("BEDROCK_MODEL_ID", "apac.anthropic.claude-3-5-sonnet-20241022-v2:0")
+        bedrock_api_key = _os.getenv("BEDROCK_API_KEY")
+        # Build request body based on model family
+        if "anthropic" in model_id.lower():
+            body = _json.dumps({"anthropic_version": "bedrock-2023-05-31", "max_tokens": 5,
+                                "messages": [{"role": "user", "content": "hi"}]})
+        else:
+            # Amazon Nova and others
+            body = _json.dumps({"messages": [{"role": "user", "content": [{"text": "hi"}]}]})
+
+        if bedrock_api_key:
+            import requests as _requests
+            url = f"https://bedrock-runtime.{aws_region}.amazonaws.com/model/{model_id}/invoke"
+            resp = _requests.post(url,
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {bedrock_api_key}"},
+                data=body, timeout=5)
+            bedrock_active = resp.status_code == 200
+        else:
+            client = boto3.client(
+                service_name='bedrock-runtime', region_name=aws_region,
+                config=_Config(connect_timeout=2, read_timeout=5, retries={'max_attempts': 0})
+            )
+            client.invoke_model(modelId=model_id, body=body)
+            bedrock_active = True
+    except Exception:
+        bedrock_active = False
+
     return {
         "status": "healthy",
         "complaints": storage.get_complaint_count(),
         "risk_zones": len(storage.get_all_risk_zones()),
-        "reports": len(storage.get_all_reports())
+        "reports": len(storage.get_all_reports()),
+        "classification_engine": "bedrock" if bedrock_active else "keyword_fallback"
     }
 
 
-@app.get("/weather")
+# ============================================================================
+# Authentication Endpoints
+# ============================================================================
+
+class AuthRequest(BaseModel):
+    """Request body for login/signup."""
+    email: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=6)
+    role: Optional[str] = Field(default="citizen")
+
+
+@api_router.post("/auth/signup")
+async def auth_signup(auth_data: AuthRequest):
+    """Register a new user account."""
+    from auth_middleware import signup_user
+    try:
+        result = signup_user(auth_data.email, auth_data.password, auth_data.role or "citizen")
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.post("/auth/login")
+async def auth_login(auth_data: AuthRequest):
+    """Login with email and password."""
+    from auth_middleware import login_user
+    try:
+        result = login_user(auth_data.email, auth_data.password)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+
+@api_router.get("/auth/me")
+async def auth_me(request: Request):
+    """Get current user info from token."""
+    from auth_middleware import get_user_from_request
+    auth_header = request.headers.get("Authorization")
+    user = get_user_from_request(auth_header)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return {"email": user["email"], "role": user["role"]}
+
+
+async def get_current_user_dep(request: Request):
+    """FastAPI Dependency for token authentication."""
+    from auth_middleware import get_user_from_request
+    auth_header = request.headers.get("Authorization")
+    user = get_user_from_request(auth_header)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+@api_router.get("/weather")
 async def get_weather():
     """
     Get current weather data
@@ -274,7 +424,7 @@ async def get_weather():
     }
 
 
-@app.get("/traffic")
+@api_router.get("/traffic")
 async def get_traffic():
     """
     Get traffic congestion data for all locations
@@ -299,15 +449,21 @@ async def get_traffic():
     ]
 
 
-@app.post(
+@api_router.post(
     "/report-complaint",
     response_model=ComplaintSubmissionResponse,
     responses={
         400: {"description": "Validation error"},
-        422: {"description": "Request body validation error"}
+        422: {"description": "Request body validation error"},
+        401: {"description": "Not authenticated"}
     }
 )
-async def report_complaint(complaint_data: ComplaintSubmission):
+@limiter.limit("5/minute")
+async def report_complaint(
+    request: Request,
+    complaint_data: ComplaintSubmission,
+    current_user: dict = Depends(get_current_user_dep)
+):
     """
     Submit a new complaint
     
@@ -341,6 +497,13 @@ async def report_complaint(complaint_data: ComplaintSubmission):
         category = complaint_data.category
         description = complaint_data.description
         timestamp = complaint_data.timestamp or datetime.now()
+
+        # Use geocoded coordinates from frontend if provided, else fall back to fixed lookup
+        incoming_coords = complaint_data.coordinates
+        if incoming_coords and "lat" in incoming_coords and "lng" in incoming_coords:
+            precise_coords = (float(incoming_coords["lat"]), float(incoming_coords["lng"]))
+        else:
+            precise_coords = None
         
         # Submit complaint
         complaint_processor = get_complaint_processor()
@@ -348,10 +511,32 @@ async def report_complaint(complaint_data: ComplaintSubmission):
             location=location,
             category=category,
             description=description,
-            timestamp=timestamp
+            timestamp=timestamp,
+            coordinates=precise_coords
         )
         
         if result.success:
+            # Broadcast new complaint via WebSocket
+            try:
+                coords = precise_coords or BENGALURU_LOCATIONS.get(location, (12.9716, 77.5946))
+                await ws_manager.broadcast({
+                    "type": "new_complaint",
+                    "complaint": {
+                        "complaint_id": result.complaint_id,
+                        "location": location,
+                        "category": category,
+                        "description": description,
+                        "timestamp": timestamp.isoformat(),
+                        "coordinates": {
+                            "latitude": coords[0],
+                            "longitude": coords[1]
+                        },
+                        "classification_confidence": getattr(result, 'classification_confidence', 1.0)
+                    }
+                })
+            except Exception:
+                pass  # Don't fail the HTTP response if broadcast fails
+            
             return {
                 "success": True,
                 "complaint_id": result.complaint_id,
@@ -371,7 +556,7 @@ async def report_complaint(complaint_data: ComplaintSubmission):
         raise HTTPException(status_code=500, detail="Failed to submit complaint")
 
 
-@app.get(
+@api_router.get(
     "/complaints",
     response_model=list[ComplaintResponse],
     responses={
@@ -435,12 +620,7 @@ async def get_complaints(
     ]
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-
-
-@app.get("/clusters")
+@api_router.get("/clusters")
 async def get_clusters():
     """
     Get current complaint clusters
@@ -481,7 +661,7 @@ async def get_clusters():
     ]
 
 
-@app.get("/risk-hotspots")
+@api_router.get("/risk-hotspots")
 async def get_risk_hotspots():
     """
     Get risk zones with risk_score > 20
@@ -495,7 +675,7 @@ async def get_risk_hotspots():
     Validates: Requirements 8.2, 8.3, 8.4
     """
     risk_engine = get_risk_engine()
-    risk_zones = risk_engine.get_filtered_risk_zones(min_score=20.0)
+    risk_zones = risk_engine.get_filtered_risk_zones(min_score=10.0)
     
     return [
         {
@@ -515,7 +695,7 @@ async def get_risk_hotspots():
     ]
 
 
-@app.get("/daily-report")
+@api_router.get("/daily-report")
 async def get_daily_report():
     """
     Get the most recent daily report
@@ -572,7 +752,7 @@ async def get_daily_report():
     }
 
 
-@app.get("/predictions")
+@api_router.get("/predictions")
 async def get_predictions():
     """
     Get current incident predictions for high-risk zones
@@ -606,15 +786,76 @@ async def get_predictions():
         traffic_data=traffic_data
     )
     
-    return [
-        {
+    # Build a zone_id → zone lookup for enriching predictions
+    zone_map = {z.zone_id: z for z in risk_zones}
+
+    from ai_classifier import AIClassifier
+
+    BENGALURU_AREAS = [
+        {"name": "Koramangala", "lat": 12.9352, "lng": 77.6245},
+        {"name": "Indiranagar", "lat": 12.9784, "lng": 77.6408},
+        {"name": "Whitefield", "lat": 12.9698, "lng": 77.7499},
+        {"name": "Electronic City", "lat": 12.8399, "lng": 77.6770},
+        {"name": "Marathahalli", "lat": 12.9591, "lng": 77.6974},
+        {"name": "HSR Layout", "lat": 12.9116, "lng": 77.6389},
+        {"name": "BTM Layout", "lat": 12.9166, "lng": 77.6101},
+        {"name": "Jayanagar", "lat": 12.9308, "lng": 77.5838},
+        {"name": "Banashankari", "lat": 12.9255, "lng": 77.5468},
+        {"name": "Rajajinagar", "lat": 12.9907, "lng": 77.5530},
+        {"name": "Malleshwaram", "lat": 13.0035, "lng": 77.5710},
+        {"name": "Hebbal", "lat": 13.0350, "lng": 77.5970},
+        {"name": "Yelahanka", "lat": 13.1007, "lng": 77.5963},
+        {"name": "Bannerghatta", "lat": 12.8635, "lng": 77.5975},
+        {"name": "Vijayanagar", "lat": 12.9719, "lng": 77.5322},
+        {"name": "Yeshwanthpur", "lat": 13.0280, "lng": 77.5390},
+        {"name": "JP Nagar", "lat": 12.9063, "lng": 77.5857},
+        {"name": "Bellandur", "lat": 12.9257, "lng": 77.6762},
+        {"name": "KR Puram", "lat": 13.0050, "lng": 77.6960},
+        {"name": "City Center", "lat": 12.9716, "lng": 77.5946},
+    ]
+
+    def nearest_area(lat, lng):
+        return min(BENGALURU_AREAS, key=lambda a: (a["lat"]-lat)**2 + (a["lng"]-lng)**2)["name"]
+
+    classifier = AIClassifier()
+
+    result = []
+    for pred in predictions:
+        zone = zone_map.get(pred.zone_id)
+        coords = None
+        area_name = "Bengaluru"
+        if zone:
+            lat, lng = zone.center_coordinates[0], zone.center_coordinates[1]
+            coords = {"latitude": lat, "longitude": lng}
+            area_name = nearest_area(lat, lng)
+
+        # Use cached Bedrock explanation if ready, else fast fallback
+        key = f"{pred.zone_id}:{pred.incident_type}"
+        explanation = (
+            risk_engine.get_explanation(pred.zone_id, pred.incident_type)
+            or classifier._fallback_explanation(
+                pred.incident_type, area_name, pred.risk_score,
+                zone.complaint_count if zone else 0, pred.time_window
+            )
+        )
+
+        result.append({
             "prediction_id": pred.prediction_id,
             "zone_id": pred.zone_id,
             "incident_type": pred.incident_type,
             "risk_score": round(pred.risk_score, 2),
             "time_window": pred.time_window,
             "contributing_factors": pred.contributing_factors,
-            "created_at": pred.created_at.isoformat()
-        }
-        for pred in predictions
-    ]
+            "created_at": pred.created_at.isoformat(),
+            "coordinates": coords,
+            "area_name": area_name,
+            "explanation": explanation,
+        })
+
+    return result
+
+app.include_router(api_router)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

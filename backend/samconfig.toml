@@ -12,7 +12,7 @@ parallel = true
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
-region = "us-east-1"
+region = "ap-south-2"
 parameter_overrides = "Environment=dev OpenWeatherMapApiKey="
 
 [default.package.parameters]
@@ -34,7 +34,7 @@ stack_name = "urbanguard-ai-system-prod"
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
-region = "us-east-1"
+region = "ap-south-2"
 parameter_overrides = "Environment=prod OpenWeatherMapApiKey="
 
 # Staging configuration
@@ -44,5 +44,5 @@ stack_name = "urbanguard-ai-system-staging"
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
-region = "us-east-1"
+region = "ap-south-2"
 parameter_overrides = "Environment=staging OpenWeatherMapApiKey="

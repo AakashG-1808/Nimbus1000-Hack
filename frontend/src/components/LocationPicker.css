@@ -1,0 +1,98 @@
+.location-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lp-hint {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.lp-map-wrap {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #ddd;
+  height: 240px;
+}
+
+.lp-map {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.lp-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lp-gps-btn {
+  align-self: flex-start;
+  padding: 8px 14px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.lp-gps-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.lp-gps-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lp-resolving {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.lp-address {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.lp-address-text {
+  font-size: 13px;
+  color: #166534;
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.lp-confirm-btn {
+  padding: 6px 12px;
+  background: #16a34a;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.lp-confirm-btn:hover {
+  background: #15803d;
+}
+
+.lp-error {
+  font-size: 12px;
+  color: #dc2626;
+  margin: 0;
+}

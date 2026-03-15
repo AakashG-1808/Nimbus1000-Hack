@@ -44,35 +44,32 @@ const MapController = ({ center, zoom }) => {
 
 /**
  * Get color for risk zone based on risk score
- * Green: 0-33 (low risk)
- * Yellow: 34-66 (medium risk)
- * Red: 67-100 (high risk)
- * 
- * Validates: Requirements 11.2
+ * Green: 0-20 (low risk)
+ * Yellow: 21-45 (medium risk)
+ * Red: 46-100 (high risk)
  */
 const getRiskZoneColor = (riskScore) => {
-  if (riskScore >= 0 && riskScore <= 33) {
+  if (riskScore <= 20) {
     return '#22c55e'; // Green - low risk
-  } else if (riskScore >= 34 && riskScore <= 66) {
+  } else if (riskScore <= 45) {
     return '#eab308'; // Yellow - medium risk
-  } else if (riskScore >= 67 && riskScore <= 100) {
+  } else {
     return '#ef4444'; // Red - high risk
   }
-  return '#9ca3af'; // Gray - default/unknown
+  return '#9ca3af';
 };
 
 /**
  * Get risk level label based on risk score
  */
 const getRiskLevelLabel = (riskScore) => {
-  if (riskScore >= 0 && riskScore <= 33) {
+  if (riskScore <= 20) {
     return 'Low Risk';
-  } else if (riskScore >= 34 && riskScore <= 66) {
+  } else if (riskScore <= 45) {
     return 'Medium Risk';
-  } else if (riskScore >= 67 && riskScore <= 100) {
+  } else {
     return 'High Risk';
   }
-  return 'Unknown';
 };
 
 /**
@@ -277,19 +274,24 @@ const MapVisualizer = ({
         
         {/* Risk Zones - Render as colored circles */}
         {riskZones.map((zone) => {
-          // Extract coordinates from zone data
-          const center = zone.center_coordinates || zone.coordinates;
-          if (!center || !Array.isArray(center) || center.length !== 2) {
+          // Extract coordinates — backend returns { latitude, longitude } object
+          const raw = zone.center_coordinates || zone.coordinates;
+          if (!raw) {
             console.warn('Invalid zone coordinates:', zone);
             return null;
           }
-
-          const [lat, lon] = center;
+          const lat = Array.isArray(raw) ? raw[0] : raw.latitude;
+          const lon = Array.isArray(raw) ? raw[1] : raw.longitude;
+          if (typeof lat !== 'number' || typeof lon !== 'number') {
+            console.warn('Invalid zone coordinates:', zone);
+            return null;
+          }
           const riskScore = zone.risk_score || 0;
           const color = getRiskZoneColor(riskScore);
           const riskLevel = getRiskLevelLabel(riskScore);
           const complaintCount = zone.complaint_count || 0;
-          const radius = zone.radius_meters || 500; // Default 500m radius
+          // Make radius visually meaningful — minimum 1km, scale up with score
+          const radius = Math.max(zone.radius_meters || 500, 1000) + (riskScore * 20);
 
           return (
             <Circle
@@ -299,8 +301,9 @@ const MapVisualizer = ({
               pathOptions={{
                 color: color,
                 fillColor: color,
-                fillOpacity: 0.3,
-                weight: 2,
+                fillOpacity: 0.35,
+                weight: 3,
+                opacity: 0.9,
               }}
               eventHandlers={{
                 click: () => {
@@ -341,19 +344,35 @@ const MapVisualizer = ({
             position={[cluster.lat, cluster.lon]}
             icon={createClusterIcon(cluster.count)}
           >
-            <Popup>
+            <Popup minWidth={280} maxWidth={320}>
               <div className="complaint-popup">
-                <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600' }}>
-                  {cluster.count} Complaints
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '15px', fontWeight: '600' }}>
+                  {cluster.count} Complaints in this area
                 </h3>
-                <div style={{ fontSize: '13px', marginBottom: '8px' }}>
-                  Clustered complaints within ~300m grid
+                <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                  {cluster.items.map((complaint, idx) => (
+                    <div key={complaint.complaint_id} style={{
+                      borderTop: idx > 0 ? '1px solid #e5e7eb' : 'none',
+                      paddingTop: idx > 0 ? '8px' : '0',
+                      marginTop: idx > 0 ? '8px' : '0',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                        <strong style={{ fontSize: '13px', textTransform: 'capitalize', color: '#111827' }}>
+                          {complaint.category.replace('_', ' ')}
+                        </strong>
+                        <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+                          {formatTimestamp(complaint.timestamp)}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#374151', marginBottom: '2px' }}>
+                        <strong>Location:</strong> {complaint.location}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#4b5563' }}>
+                        {complaint.description}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                {Object.keys(cluster.categories).map((category) => (
-                  <div key={category} style={{ fontSize: '13px', marginBottom: '4px' }}>
-                    <strong>{category.replace('_', ' ')}:</strong> {cluster.categories[category]}
-                  </div>
-                ))}
               </div>
             </Popup>
           </Marker>
@@ -410,15 +429,15 @@ const MapVisualizer = ({
         <div className="legend-title">Map Legend</div>
         <div className="legend-item">
           <span className="legend-color" style={{ backgroundColor: '#22c55e' }}></span>
-          <span>Low Risk (0-33)</span>
+          <span>Low Risk (0-20)</span>
         </div>
         <div className="legend-item">
           <span className="legend-color" style={{ backgroundColor: '#eab308' }}></span>
-          <span>Medium Risk (34-66)</span>
+          <span>Medium Risk (21-45)</span>
         </div>
         <div className="legend-item">
           <span className="legend-color" style={{ backgroundColor: '#ef4444' }}></span>
-          <span>High Risk (67-100)</span>
+          <span>High Risk (46-100)</span>
         </div>
       </div>
       

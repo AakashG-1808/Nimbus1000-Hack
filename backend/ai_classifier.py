@@ -113,25 +113,49 @@ class AIClassifier:
         self.circuit_breaker = CircuitBreaker(failure_threshold=5, timeout_seconds=60)
         self.bedrock_timeout = 3  # seconds
         
-        # Initialize Bedrock client if credentials are available
         try:
-            aws_region = os.getenv("AWS_REGION", "us-east-1")
-            model_id = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-v2")
-            
-            # Configure boto3 with timeout settings
+            aws_region = os.getenv("AWS_BEDROCK_REGION", os.getenv("AWS_REGION", "ap-south-2"))
+            model_id = os.getenv("BEDROCK_MODEL_ID", "apac.anthropic.claude-3-5-sonnet-20241022-v2:0")
+            bedrock_api_key = os.getenv("BEDROCK_API_KEY")
+
             config = Config(
                 region_name=aws_region,
                 read_timeout=self.bedrock_timeout,
                 connect_timeout=2,
-                retries={'max_attempts': 0}  # No automatic retries, we handle this
+                retries={'max_attempts': 0}
             )
-            
-            self.bedrock_client = boto3.client(
-                service_name='bedrock-runtime',
-                config=config
-            )
+
+            if bedrock_api_key:
+                # Use Bedrock API key authentication
+                self.bedrock_client = boto3.client(
+                    service_name='bedrock-runtime',
+                    region_name=aws_region,
+                    aws_access_key_id=bedrock_api_key,
+                    aws_secret_access_key="bedrock-api-key",  # placeholder, not used with API key auth
+                    config=config
+                )
+                # Bedrock API keys use a different auth header — use requests directly
+                self._use_api_key = True
+                self._api_key = bedrock_api_key
+                self._api_region = aws_region
+                # Still set bedrock_client to a real boto3 client for compatibility
+                # but override the actual call to use API key header
+                self.bedrock_client = boto3.client(
+                    service_name='bedrock-runtime',
+                    region_name=aws_region,
+                    config=config
+                )
+                self._use_api_key = True
+            else:
+                self._use_api_key = False
+                self.bedrock_client = boto3.client(
+                    service_name='bedrock-runtime',
+                    config=config
+                )
+
             self.model_id = model_id
-            logger.info(f"Bedrock client initialized with model {model_id} in region {aws_region}")
+            logger.info(f"Bedrock client initialized with model {model_id} in region {aws_region}"
+                        + (" (API key auth)" if self._use_api_key else " (IAM auth)"))
         except Exception as e:
             logger.warning(f"Failed to initialize Bedrock client: {e}. Will use keyword fallback only.")
             self.bedrock_client = None
@@ -216,13 +240,17 @@ class AIClassifier:
         # Prepare request body based on model
         if "anthropic" in self.model_id.lower():
             body = json.dumps({
-                "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
-                "max_tokens_to_sample": 100,
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 100,
                 "temperature": 0.1,
-                "top_p": 0.9,
+                "messages": [{"role": "user", "content": prompt}]
+            })
+        elif "amazon.nova" in self.model_id.lower():
+            # Amazon Nova uses Converse-style messages API
+            body = json.dumps({
+                "messages": [{"role": "user", "content": [{"text": prompt}]}]
             })
         else:
-            # Generic format for other models
             body = json.dumps({
                 "prompt": prompt,
                 "max_tokens": 100,
@@ -230,18 +258,38 @@ class AIClassifier:
             })
         
         try:
-            # Call Bedrock API with timeout
-            response = self.bedrock_client.invoke_model(
-                modelId=self.model_id,
-                body=body
-            )
-            
-            # Parse response
-            response_body = json.loads(response['body'].read())
+            # Call Bedrock API — use API key header if configured, else IAM via boto3
+            if getattr(self, '_use_api_key', False):
+                import requests as _requests
+                url = (f"https://bedrock-runtime.{self._api_region}.amazonaws.com"
+                       f"/model/{self.model_id}/invoke")
+                resp = _requests.post(
+                    url,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self._api_key}",
+                    },
+                    data=body,
+                    timeout=self.bedrock_timeout
+                )
+                resp.raise_for_status()
+                response_body = resp.json()
+            else:
+                response = self.bedrock_client.invoke_model(
+                    modelId=self.model_id,
+                    body=body
+                )
+                response_body = json.loads(response['body'].read())
             
             # Extract completion based on model
             if "anthropic" in self.model_id.lower():
-                completion = response_body.get('completion', '')
+                completion = response_body.get("content", [{}])[0].get("text", "")
+            elif "amazon.nova" in self.model_id.lower():
+                # Nova returns output.message.content[0].text
+                completion = (response_body.get("output", {})
+                              .get("message", {})
+                              .get("content", [{}])[0]
+                              .get("text", ""))
             else:
                 completion = response_body.get('generated_text', '')
             
@@ -334,7 +382,92 @@ Your response:"""
         
         return (category, confidence)
     
-    def _keyword_classify(self, description: str) -> Tuple[str, float]:
+    def explain_prediction(
+        self,
+        incident_type: str,
+        area_name: str,
+        risk_score: float,
+        dominant_category: str,
+        complaint_count: int,
+        contributing_factors: list,
+        time_window: str,
+    ) -> str:
+        """
+        Generate a 2-3 sentence natural language explanation for an incident prediction.
+        Falls back to a template string if Bedrock is unavailable.
+        """
+        factors_text = ", ".join(
+            f.replace("_", " ") for f in contributing_factors
+        )
+        prompt = (
+            f"You are an urban risk analyst for Bengaluru, India.\n"
+            f"Write exactly 2 sentences explaining this incident prediction to a city official.\n"
+            f"Be specific and actionable. Do not use bullet points.\n\n"
+            f"Prediction details:\n"
+            f"- Area: {area_name}\n"
+            f"- Predicted incident: {incident_type.replace('_', ' ')}\n"
+            f"- Risk score: {risk_score:.0f}/100\n"
+            f"- Dominant complaint type: {dominant_category}\n"
+            f"- Number of complaints in zone: {complaint_count}\n"
+            f"- Contributing factors: {factors_text}\n"
+            f"- Expected time window: {time_window}\n\n"
+            f"Your 2-sentence explanation:"
+        )
+
+        try:
+            if self.bedrock_client is None:
+                raise RuntimeError("No Bedrock client")
+
+            if "amazon.nova" in self.model_id.lower():
+                body = json.dumps({
+                    "messages": [{"role": "user", "content": [{"text": prompt}]}]
+                })
+            else:
+                body = json.dumps({
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 150,
+                    "temperature": 0.4,
+                    "messages": [{"role": "user", "content": prompt}]
+                })
+
+            if getattr(self, '_use_api_key', False):
+                import requests as _req
+                url = (f"https://bedrock-runtime.{self._api_region}.amazonaws.com"
+                       f"/model/{self.model_id}/invoke")
+                resp = _req.post(
+                    url,
+                    headers={"Content-Type": "application/json",
+                             "Authorization": f"Bearer {self._api_key}"},
+                    data=body, timeout=8
+                )
+                resp.raise_for_status()
+                rb = resp.json()
+            else:
+                response = self.bedrock_client.invoke_model(modelId=self.model_id, body=body)
+                rb = json.loads(response['body'].read())
+
+            if "amazon.nova" in self.model_id.lower():
+                text = (rb.get("output", {}).get("message", {})
+                        .get("content", [{}])[0].get("text", ""))
+            else:
+                text = rb.get("content", [{}])[0].get("text", "")
+
+            return text.strip() if text.strip() else self._fallback_explanation(
+                incident_type, area_name, risk_score, complaint_count, time_window
+            )
+        except Exception as e:
+            logger.warning(f"Bedrock explanation failed: {e}")
+            return self._fallback_explanation(
+                incident_type, area_name, risk_score, complaint_count, time_window
+            )
+
+    def _fallback_explanation(self, incident_type, area_name, risk_score, complaint_count, time_window):
+        type_label = incident_type.replace("_", " ").title()
+        return (
+            f"{complaint_count} complaints have been reported in the {area_name} area, "
+            f"pushing the risk score to {risk_score:.0f}/100. "
+            f"A {type_label} incident is likely within the {time_window}."
+        )
         """
         Fallback keyword-based classification.
         

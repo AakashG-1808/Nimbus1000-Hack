@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { complaintsAPI, riskAPI, weatherAPI, trafficAPI } from '../services/api';
+import { complaintsAPI, riskAPI, weatherAPI, trafficAPI, predictionsAPI, reportsAPI, websocketAPI } from '../services/api';
+import { getCurrentUser, logout, isAdmin } from '../services/auth';
 import MapVisualizer from './MapVisualizer';
 import ComplaintFeed from './ComplaintFeed';
 import TrendCharts from './TrendCharts';
 import WeatherPanel from './WeatherPanel';
 import TrafficPanel from './TrafficPanel';
+import PredictionsPanel from './PredictionsPanel';
+import AIInsightsPanel from './AIInsightsPanel';
 import ComplaintForm from './ComplaintForm';
 import './Dashboard.css';
 
@@ -74,8 +77,21 @@ const Dashboard = () => {
     error: null,
     lastUpdated: null
   });
+  const [predictionsState, setPredictionsState] = useState({
+    data: [],
+    loading: true,
+    error: null,
+    lastUpdated: null
+  });
+  const [dailyReportState, setDailyReportState] = useState({
+    data: null,
+    loading: true,
+    error: null,
+    lastUpdated: null
+  });
   const [pollIntervalMs, setPollIntervalMs] = useState(BASE_POLL_INTERVAL);
   const [isPollingPaused, setIsPollingPaused] = useState(false);
+  const [wsStatus, setWsStatus] = useState('disconnected');
   const [filters, setFilters] = useState({
     category: 'all',
     timeRange: '24h',
@@ -86,8 +102,66 @@ const Dashboard = () => {
   const [toast, setToast] = useState(null);
   const [showComplaintForm, setShowComplaintForm] = useState(false);
   const [isSubmittingComplaint, setIsSubmittingComplaint] = useState(false);
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  const [classificationEngine, setClassificationEngine] = useState(null);
   const modalContentRef = useRef(null);
   const isTabVisibleRef = useRef(true);
+
+  // User auth info
+  const user = getCurrentUser();
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/login';
+  };
+
+  // Theme configuration
+  useEffect(() => {
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  // Fetch real classification engine status from backend once on mount
+  useEffect(() => {
+    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    fetch(`${baseUrl}/health`)
+      .then(r => r.json())
+      .then(data => setClassificationEngine(data.classification_engine || 'keyword_fallback'))
+      .catch(() => setClassificationEngine('keyword_fallback'));
+  }, []);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
+
+  // State handlers
+  const exportToCSV = () => {
+    const headers = ['Complaint ID', 'Category', 'Location', 'Risk Score', 'Description', 'Timestamp', 'AI Confidence'];
+    const rows = filteredComplaints.map(c => {
+      // Find matching risk score for the location if possible
+      const riskZone = riskZonesState.data.find(z => z.zone_id === c.location.toLowerCase().replace(/\s+/g, '-'));
+      const riskScore = riskZone ? Math.round(riskZone.risk_score) : 'N/A';
+      return [
+        c.complaint_id,
+        c.category,
+        c.location,
+        riskScore,
+        `"${(c.description || '').replace(/"/g, '""')}"`, // escape quotes and wrap in quotes to handle commas
+        new Date(c.timestamp).toLocaleString(),
+        c.classification_confidence ? Math.round(c.classification_confidence * 100) + '%' : 'N/A'
+      ];
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers, ...rows].map(e => e.join(",")).join("\n");
+      
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `urbanguard_complaints_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link); // Required for FF
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const formatRelativeTime = (timestamp) => {
     if (!timestamp) {
@@ -136,6 +210,8 @@ const Dashboard = () => {
         setRiskZonesState((prev) => ({ ...prev, loading: true }));
         setWeatherState((prev) => ({ ...prev, loading: true }));
         setTrafficState((prev) => ({ ...prev, loading: true }));
+        setPredictionsState((prev) => ({ ...prev, loading: true }));
+        setDailyReportState((prev) => ({ ...prev, loading: true }));
       }
 
       const complaintParams = {
@@ -151,11 +227,13 @@ const Dashboard = () => {
       }
 
       // Fetch all data in parallel
-      const [complaintsRes, riskRes, weatherRes, trafficRes] = await Promise.allSettled([
+      const [complaintsRes, riskRes, weatherRes, trafficRes, predictionsRes, reportRes] = await Promise.allSettled([
         complaintsAPI.getComplaints(complaintParams),
         riskAPI.getRiskHotspots(),
         weatherAPI.getWeather(),
         trafficAPI.getTraffic(),
+        predictionsAPI.getPredictions(),
+        reportsAPI.getDailyReport(),
       ]);
 
       const now = new Date();
@@ -225,6 +303,39 @@ const Dashboard = () => {
         }));
       }
 
+      if (predictionsRes.status === 'fulfilled') {
+        setPredictionsState({
+          data: predictionsRes.value.data,
+          loading: false,
+          error: null,
+          lastUpdated: now
+        });
+      } else {
+        hadError = true;
+        setPredictionsState((prev) => ({
+          ...prev,
+          loading: false,
+          error: 'Failed to refresh predictions'
+        }));
+      }
+
+      if (reportRes.status === 'fulfilled') {
+        setDailyReportState({
+          data: reportRes.value.data,
+          loading: false,
+          error: null,
+          lastUpdated: now
+        });
+      } else {
+        // Daily report 404 is expected if no reports yet
+        setDailyReportState((prev) => ({
+          ...prev,
+          loading: false,
+          error: null,
+          lastUpdated: now
+        }));
+      }
+
       setPollIntervalMs((prev) => {
         if (hadError) {
           return Math.min(prev * 2, MAX_POLL_INTERVAL);
@@ -284,6 +395,42 @@ const Dashboard = () => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [fetchDashboardData]);
+
+  // WebSocket connection for real-time updates
+  useEffect(() => {
+    websocketAPI.connect();
+
+    const unsubStatus = websocketAPI.onStatusChange((status) => {
+      setWsStatus(status);
+    });
+
+    const unsubMessage = websocketAPI.onMessage((data) => {
+      if (data.type === 'new_complaint' && data.complaint) {
+        // Prepend new complaint instantly
+        setComplaintsState((prev) => ({
+          ...prev,
+          data: [data.complaint, ...prev.data],
+          lastUpdated: new Date()
+        }));
+
+        // Show toast notification
+        const category = data.complaint.category
+          .split('_')
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+        setToast({
+          type: 'info',
+          message: `New complaint: ${category} at ${data.complaint.location}`
+        });
+      }
+    });
+
+    return () => {
+      unsubStatus();
+      unsubMessage();
+      websocketAPI.disconnect();
+    };
+  }, []);
 
   // Handle successful complaint submission
   const handleComplaintSubmitStart = () => {
@@ -393,8 +540,36 @@ const Dashboard = () => {
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h1>UrbanGuard AI Dashboard</h1>
-        <p className="dashboard-subtitle">Live infrastructure signals across Bengaluru</p>
+        <div className="dashboard-header-top">
+          <div className="dashboard-title-group">
+            <h1>UrbanGuard AI Dashboard</h1>
+            <p className="dashboard-subtitle">Live infrastructure signals across Bengaluru</p>
+          </div>
+          <div className="dashboard-header-right" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <button 
+              className="theme-toggle-btn" 
+              onClick={toggleTheme}
+              title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+              style={{
+                background: 'transparent', border: '1px solid var(--border-light)', 
+                borderRadius: '50%', width: '36px', height: '36px', 
+                cursor: 'pointer', fontSize: '18px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+              }}
+            >
+              {theme === 'light' ? '🌙' : '☀️'}
+            </button>
+            
+            {user && (
+              <div className="user-profile">
+                <span className="user-email">{user.email}</span>
+                <span className={`user-role-badge ${user.role}`}>{user.role}</span>
+                <button className="logout-btn" onClick={handleLogout}>Logout</button>
+              </div>
+            )}
+          </div>
+        </div>
         <div className="dashboard-filters">
           <div className="filter-group">
             <label htmlFor="filter-category">Category</label>
@@ -448,16 +623,29 @@ const Dashboard = () => {
             </select>
           </div>
         </div>
-        <button 
-          className="report-complaint-button"
-          onClick={() => setShowComplaintForm(true)}
-          disabled={isSubmittingComplaint}
-        >
-          {isSubmittingComplaint ? 'Submitting...' : '+ Report Complaint'}
-        </button>
+        <div className="dashboard-actions">
+          <button 
+            className="export-csv-button"
+            onClick={exportToCSV}
+            title="Export filtered complaints to CSV"
+          >
+            <span role="img" aria-label="download">⬇️</span> Export CSV
+          </button>
+          <button 
+            className="report-complaint-button"
+            onClick={() => setShowComplaintForm(true)}
+            disabled={isSubmittingComplaint}
+          >
+            {isSubmittingComplaint ? 'Submitting...' : '+ Report Complaint'}
+          </button>
+        </div>
         <div className="dashboard-status">
-          <span className={`status-indicator ${isPollingPaused ? 'paused' : 'live'}`}>
-            {isPollingPaused ? 'Paused (tab hidden)' : `Live updates every ${pollIntervalMs / 1000}s`}
+          <span className={`status-indicator ${wsStatus === 'connected' ? 'realtime' : isPollingPaused ? 'paused' : 'live'}`}>
+            {wsStatus === 'connected'
+              ? '🟢 Real-time connected'
+              : isPollingPaused
+                ? 'Paused (tab hidden)'
+                : `Live updates every ${pollIntervalMs / 1000}s`}
           </span>
         </div>
       </div>
@@ -635,11 +823,54 @@ const Dashboard = () => {
             </span>
           </div>
           <div className="section-content">
-            {/* TrendCharts component - Task 17.1 */}
             <TrendCharts
               complaints={filteredComplaints}
               riskZones={filteredRiskZones}
               loading={complaintsState.loading || riskZonesState.loading}
+            />
+          </div>
+        </section>
+
+        {/* Predictions Section */}
+        <section className="dashboard-section predictions-section">
+          <div className="section-header">
+            <h2>Incident Predictions</h2>
+            <div className="section-meta">
+              <span className="section-badge">{predictionsState.data.length} active</span>
+              <span className={`section-status ${isStale(predictionsState) ? 'stale' : ''}`}>
+                {predictionsState.loading && !predictionsState.lastUpdated
+                  ? 'Loading...'
+                  : `Updated ${formatRelativeTime(predictionsState.lastUpdated)}`}
+              </span>
+            </div>
+          </div>
+          <div className="section-content">
+            <PredictionsPanel
+              predictions={predictionsState.data}
+              loading={predictionsState.loading}
+              error={predictionsState.error}
+              stale={isStale(predictionsState)}
+            />
+          </div>
+        </section>
+
+        {/* AI Insights Section */}
+        <section className="dashboard-section ai-section">
+          <div className="section-header">
+            <h2>AI Insights</h2>
+            <span className={`section-status ${isStale(dailyReportState) ? 'stale' : ''}`}>
+              {dailyReportState.loading && !dailyReportState.lastUpdated
+                ? 'Loading...'
+                : `Updated ${formatRelativeTime(dailyReportState.lastUpdated)}`}
+            </span>
+          </div>
+          <div className="section-content">
+            <AIInsightsPanel
+              dailyReport={dailyReportState.data}
+              complaints={complaintsState.data}
+              loading={dailyReportState.loading}
+              error={dailyReportState.error}
+              classificationEngine={classificationEngine}
             />
           </div>
         </section>

@@ -178,3 +178,125 @@
     font-size: 13px;
   }
 }
+
+/* Location search autocomplete */
+.location-search-wrapper {
+  position: relative;
+}
+
+.location-search-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.location-search-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.location-search-input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.location-confirmed {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #16a34a;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.location-loading {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #6b7280;
+  pointer-events: none;
+}
+
+.location-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  z-index: 3000;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.location-suggestions li {
+  padding: 9px 12px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.location-suggestions li:hover {
+  background-color: #f0f4ff;
+  color: var(--color-accent);
+}
+
+.suggestion-main {
+  font-weight: 500;
+  color: #111827;
+}
+
+.suggestion-sub {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* Location mode toggle */
+.location-mode-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.mode-btn {
+  padding: 6px 14px;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  background: white;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mode-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.mode-btn.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}

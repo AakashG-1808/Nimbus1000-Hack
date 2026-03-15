@@ -38,20 +38,11 @@ class ComplaintProcessor:
     
     def validate_location(self, location: str) -> tuple[bool, Optional[str]]:
         """
-        Validates that location exists in Bengaluru locations.
-        
-        Args:
-            location: Location name to validate
-            
-        Returns:
-            Tuple of (is_valid, error_message)
+        Validates location. Accepts any non-empty string — free-text addresses
+        are supported since coordinates are now geocoded on the frontend.
         """
-        if not location:
+        if not location or not location.strip():
             return False, "Missing required field: location"
-        
-        if location not in BENGALURU_LOCATIONS:
-            return False, f"Invalid location: {location} not found in Bengaluru locations"
-        
         return True, None
     
     def validate_category(self, category: str) -> tuple[bool, Optional[str]]:
@@ -154,23 +145,16 @@ class ComplaintProcessor:
         return True, None
     
     def get_coordinates(self, location: str) -> tuple[float, float]:
-        """
-        Retrieves coordinates for a valid Bengaluru location.
-        
-        Args:
-            location: Valid Bengaluru location name
-            
-        Returns:
-            Tuple of (latitude, longitude)
-        """
-        return BENGALURU_LOCATIONS[location]
+        """Returns coordinates for a location, defaulting to Bengaluru centre."""
+        return BENGALURU_LOCATIONS.get(location, (12.9716, 77.5946))
     
     def submit_complaint(
         self,
         location: str,
         category: str,
         description: str,
-        timestamp: datetime
+        timestamp: datetime,
+        coordinates: tuple[float, float] | None = None
     ) -> ComplaintResult:
         """
         Validates and stores a citizen complaint.
@@ -205,8 +189,8 @@ class ComplaintProcessor:
         # Generate unique complaint ID
         complaint_id = str(uuid4())
         
-        # Look up coordinates from location
-        coordinates = self.get_coordinates(location)
+        # Use provided precise coordinates, or fall back to fixed location lookup
+        coordinates = coordinates or self.get_coordinates(location)
         
         # Create complaint object
         complaint = Complaint(

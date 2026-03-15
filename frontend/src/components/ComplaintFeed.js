@@ -59,6 +59,18 @@ const ComplaintFeed = ({ complaints = [], loading = false, error = null, stale =
       .join(' ');
   };
 
+  // Get confidence badge styling
+  const getConfidenceBadge = (confidence) => {
+    if (confidence === undefined || confidence === null) return null;
+    const percent = Math.round(confidence * 100);
+    let className = 'confidence-badge';
+    if (confidence >= 0.8) className += ' confidence-high';
+    else if (confidence >= 0.5) className += ' confidence-medium';
+    else className += ' confidence-low';
+    const icon = confidence >= 0.8 ? '🤖' : '🔑';
+    return { className, percent, icon };
+  };
+
   // Update displayed complaints when complaints prop changes
   useEffect(() => {
     // Sort by timestamp descending and take the 20 most recent
@@ -162,6 +174,17 @@ const ComplaintFeed = ({ complaints = [], loading = false, error = null, stale =
           <div className="complaint-description">
             {complaint.description}
           </div>
+
+          {(() => {
+            const badge = getConfidenceBadge(complaint.classification_confidence);
+            if (!badge) return null;
+            return (
+              <div className={badge.className}>
+                <span>{badge.icon}</span>
+                <span>{badge.percent}%</span>
+              </div>
+            );
+          })()}
         </div>
       ))}
     </div>

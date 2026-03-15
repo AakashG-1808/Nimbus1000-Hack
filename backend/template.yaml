@@ -16,6 +16,7 @@ Globals:
         DYNAMODB_TABLE_COMPLAINTS: !Ref ComplaintsTable
         DYNAMODB_TABLE_RISK_ZONES: !Ref RiskZonesTable
         DYNAMODB_TABLE_REPORTS: !Ref DailyReportsTable
+        DYNAMODB_TABLE_USERS: !Ref UsersTable
         OPENWEATHERMAP_API_KEY: !Ref OpenWeatherMapApiKey
         AWS_BEDROCK_REGION: !Ref AWS::Region
 
@@ -62,6 +63,8 @@ Resources:
             TableName: !Ref RiskZonesTable
         - DynamoDBCrudPolicy:
             TableName: !Ref DailyReportsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
         - Statement:
             - Effect: Allow
               Action:
@@ -153,6 +156,38 @@ Resources:
             RestApiId: !Ref UrbanGuardApi
             Path: /predictions
             Method: GET
+        
+        # Auth - signup endpoint
+        AuthSignupApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /api/v1/auth/signup
+            Method: POST
+        
+        # Auth - login endpoint
+        AuthLoginApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /api/v1/auth/login
+            Method: POST
+        
+        # Auth - me endpoint
+        AuthMeApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /api/v1/auth/me
+            Method: GET
+        
+        # Catch-all proxy for all other /api/v1/* routes
+        ApiV1ProxyApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UrbanGuardApi
+            Path: /api/v1/{proxy+}
+            Method: ANY
   
   # ==========================================================================
   # API Gateway
@@ -401,6 +436,63 @@ Resources:
         - Key: Application
           Value: UrbanGuard
   
+  # Users Table (Account Storage)
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub urbanguard-users-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: email
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: UrbanGuard
+
+  # ==========================================================================
+  # Cognito User Pool (Authentication)
+  # ==========================================================================
+  UrbanGuardUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub urbanguard-users-${Environment}
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+      Schema:
+        - Name: role
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+      UsernameAttributes:
+        - email
+
+  UrbanGuardUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UrbanGuardUserPool
+      ClientName: !Sub urbanguard-client-${Environment}
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+
   # ==========================================================================
   # CloudWatch Log Groups
   # ==========================================================================
@@ -458,3 +550,21 @@ Outputs:
     Value: !Ref UrbanGuardApi
     Export:
       Name: !Sub ${AWS::StackName}-ApiGatewayId
+
+  CognitoUserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UrbanGuardUserPool
+    Export:
+      Name: !Sub ${AWS::StackName}-UserPoolId
+
+  CognitoUserPoolClientId:
+    Description: Cognito App Client ID
+    Value: !Ref UrbanGuardUserPoolClient
+    Export:
+      Name: !Sub ${AWS::StackName}-UserPoolClientId
+
+  UsersTableName:
+    Description: DynamoDB Users table name
+    Value: !Ref UsersTable
+    Export:
+      Name: !Sub ${AWS::StackName}-UsersTable

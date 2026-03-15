@@ -1,7 +1,16 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
+import LoginPage from './components/LoginPage';
+import { isAuthenticated } from './services/auth';
 import './App.css';
+
+const ProtectedRoute = ({ children }) => {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
 
 function App() {
   return (
@@ -9,7 +18,15 @@ function App() {
       <div className="App">
         <main>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route 
+              path="/" 
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
           </Routes>
         </main>
       </div>
