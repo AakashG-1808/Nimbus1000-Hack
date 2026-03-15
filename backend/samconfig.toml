@@ -3,6 +3,7 @@ version = 0.1
 [default]
 [default.global.parameters]
 stack_name = "urbanguard-ai-system"
+region = "ap-south-2"
 
 [default.build.parameters]
 cached = true
@@ -13,7 +14,10 @@ capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
 region = "ap-south-2"
-parameter_overrides = "Environment=dev OpenWeatherMapApiKey="
+parameter_overrides = "Environment=\"dev\" AlertEmail=\"aakashg18.pes@gmail.com\""
+stack_name = "urbanguard-dev"
+s3_prefix = "urbanguard-dev"
+image_repositories = []
 
 [default.package.parameters]
 resolve_s3 = true

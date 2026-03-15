@@ -92,6 +92,12 @@ const Dashboard = () => {
   const [pollIntervalMs, setPollIntervalMs] = useState(BASE_POLL_INTERVAL);
   const [isPollingPaused, setIsPollingPaused] = useState(false);
   const [wsStatus, setWsStatus] = useState('disconnected');
+  // Ticks every second so relative timestamps re-render automatically
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
   const [filters, setFilters] = useState({
     category: 'all',
     timeRange: '24h',

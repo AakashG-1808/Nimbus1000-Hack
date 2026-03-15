@@ -12,13 +12,15 @@ Globals:
     Runtime: python3.12
     Environment:
       Variables:
-        AWS_REGION: !Ref AWS::Region
         DYNAMODB_TABLE_COMPLAINTS: !Ref ComplaintsTable
         DYNAMODB_TABLE_RISK_ZONES: !Ref RiskZonesTable
         DYNAMODB_TABLE_REPORTS: !Ref DailyReportsTable
         DYNAMODB_TABLE_USERS: !Ref UsersTable
         OPENWEATHERMAP_API_KEY: !Ref OpenWeatherMapApiKey
         AWS_BEDROCK_REGION: !Ref AWS::Region
+        SNS_ALERT_TOPIC_ARN: !Ref AlertTopic
+        SQS_COMPLAINT_QUEUE_URL: !Ref ComplaintQueue
+        S3_BUCKET_NAME: !Ref DataBucket
 
 # ============================================================================
 # Parameters
@@ -38,6 +40,17 @@ Parameters:
       - dev
       - staging
       - prod
+
+  AlertEmail:
+    Type: String
+    Description: Email address to receive SNS risk alerts (optional)
+    Default: ''
+
+# ============================================================================
+# Conditions
+# ============================================================================
+Conditions:
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
 
 # ============================================================================
 # Resources
@@ -65,11 +78,25 @@ Resources:
             TableName: !Ref DailyReportsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref UsersTable
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ComplaintQueue.QueueName
         - Statement:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
               Resource: '*'
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref AlertTopic
+            - Effect: Allow
+              Action:
+                - sqs:ReceiveMessage
+                - sqs:DeleteMessage
+                - sqs:GetQueueAttributes
+              Resource: !GetAtt ComplaintQueue.Arn
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup
@@ -188,6 +215,22 @@ Resources:
             RestApiId: !Ref UrbanGuardApi
             Path: /api/v1/{proxy+}
             Method: ANY
+
+        # SQS trigger for async complaint processing
+        ComplaintQueueTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ComplaintQueue.Arn
+            BatchSize: 10
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
+        # EventBridge scheduled rule — daily report at 06:00 IST (00:30 UTC)
+        DailyReportSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(30 0 * * ? *)
+            Description: Generate daily civic risk report at 06:00 IST
   
   # ==========================================================================
   # API Gateway
@@ -197,146 +240,155 @@ Resources:
     Properties:
       Name: !Sub urbanguard-api-${Environment}
       StageName: !Ref Environment
+      TracingEnabled: false
       Cors:
         AllowOrigin: "'*'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowMethods: "'GET,POST,OPTIONS'"
         MaxAge: "'600'"
-      DefinitionBody:
-        openapi: 3.0.1
-        info:
-          title: UrbanGuard AI System API
-          version: 1.0.0
-          description: Urban infrastructure risk prediction system API
-        paths:
-          /:
-            get:
-              summary: Root endpoint
-              responses:
-                '200':
-                  description: API information
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
-          /health:
-            get:
-              summary: Health check endpoint
-              responses:
-                '200':
-                  description: Health status
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
-          /report-complaint:
-            post:
-              summary: Submit a new complaint
-              requestBody:
-                required: true
-                content:
-                  application/json:
-                    schema:
-                      type: object
-                      required:
-                        - location
-                        - category
-                        - description
-                      properties:
-                        location:
-                          type: string
-                        category:
-                          type: string
-                        description:
-                          type: string
-                        timestamp:
-                          type: string
-                          format: date-time
-              responses:
-                '200':
-                  description: Complaint submitted successfully
-                '400':
-                  description: Invalid input
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
-          /complaints:
-            get:
-              summary: Get all complaints
-              responses:
-                '200':
-                  description: List of complaints
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
-          /clusters:
-            get:
-              summary: Get complaint clusters
-              responses:
-                '200':
-                  description: List of clusters
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
-          /risk-hotspots:
-            get:
-              summary: Get risk hotspots
-              responses:
-                '200':
-                  description: List of risk zones
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
-          /daily-report:
-            get:
-              summary: Get latest daily report
-              responses:
-                '200':
-                  description: Daily report
-                '404':
-                  description: No reports available
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
-          /weather:
-            get:
-              summary: Get current weather data
-              responses:
-                '200':
-                  description: Weather data
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
-          /traffic:
-            get:
-              summary: Get traffic congestion data
-              responses:
-                '200':
-                  description: Traffic data
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
-          /predictions:
-            get:
-              summary: Get incident predictions
-              responses:
-                '200':
-                  description: List of predictions
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UrbanGuardApiFunction.Arn}/invocations
-      AccessLogSetting:
-        DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
-        Format: '$context.requestId $context.extendedRequestId $context.identity.sourceIp $context.requestTime $context.httpMethod $context.routeKey $context.status $context.protocol $context.responseLength'
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: 'OFF'
+          DataTraceEnabled: false
+          MetricsEnabled: false
   
+  # ==========================================================================
+  # S3 Bucket — BBMP datasets, daily reports, BBMP insights cache
+  # ==========================================================================
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub urbanguard-data-${Environment}-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldReports
+            Status: Enabled
+            Prefix: reports/
+            ExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: UrbanGuard
+
+  # ==========================================================================
+  # SNS Topic — High-risk zone alerts and daily report notifications
+  # ==========================================================================
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub urbanguard-alerts-${Environment}
+      DisplayName: UrbanGuard Risk Alerts
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: UrbanGuard
+
+  # Email subscription — set AlertEmail parameter to subscribe
+  AlertEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  # ==========================================================================
+  # SQS Queue — Async complaint processing (decouples submission from AI)
+  # ==========================================================================
+  ComplaintQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub urbanguard-complaints-${Environment}
+      VisibilityTimeout: 60
+      MessageRetentionPeriod: 86400  # 24 hours
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ComplaintDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: UrbanGuard
+
+  ComplaintDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub urbanguard-complaints-dlq-${Environment}
+      MessageRetentionPeriod: 604800  # 7 days
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ==========================================================================
+  # CloudWatch Alarms
+  # ==========================================================================
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub urbanguard-lambda-errors-${Environment}
+      AlarmDescription: Lambda function error rate too high
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref UrbanGuardApiFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  LambdaThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub urbanguard-lambda-throttles-${Environment}
+      AlarmDescription: Lambda function being throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref UrbanGuardApiFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  DLQDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub urbanguard-dlq-depth-${Environment}
+      AlarmDescription: Complaints failing to process (DLQ has messages)
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ComplaintDLQ.QueueName
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
   # ==========================================================================
   # DynamoDB Tables
   # ==========================================================================
@@ -568,3 +620,21 @@ Outputs:
     Value: !Ref UsersTable
     Export:
       Name: !Sub ${AWS::StackName}-UsersTable
+
+  SNSAlertTopicArn:
+    Description: SNS topic ARN for risk alerts
+    Value: !Ref AlertTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-AlertTopicArn
+
+  SQSComplaintQueueUrl:
+    Description: SQS queue URL for async complaint processing
+    Value: !Ref ComplaintQueue
+    Export:
+      Name: !Sub ${AWS::StackName}-ComplaintQueueUrl
+
+  S3DataBucketName:
+    Description: S3 bucket for BBMP data and reports
+    Value: !Ref DataBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-DataBucket

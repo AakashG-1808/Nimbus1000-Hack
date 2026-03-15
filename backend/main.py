@@ -854,6 +854,23 @@ async def get_predictions():
 
     return result
 
+@api_router.get("/bbmp-insights")
+async def get_bbmp_insights():
+    """
+    Get Bedrock-generated analysis of the BBMP historical dataset.
+    Returns hotspot risk boosts, category weights, seasonal warnings, and a summary.
+    Returns 404 if no BBMP data has been loaded.
+    """
+    from bbmp_data_loader import get_bbmp_insights as _get_insights
+    insights = _get_insights()
+    if insights is None:
+        raise HTTPException(
+            status_code=404,
+            detail="BBMP dataset not loaded. Place a BBMP CSV in backend/data/ and restart."
+        )
+    return insights
+
+
 app.include_router(api_router)
 
 if __name__ == "__main__":

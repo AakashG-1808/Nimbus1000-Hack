@@ -311,30 +311,58 @@ class AIClassifier:
     
     def _create_classification_prompt(self, description: str, location: str) -> str:
         """
-        Creates the classification prompt for Bedrock.
-        
-        Args:
-            description: Complaint text
-            location: Location context
-            
-        Returns:
-            Formatted prompt string
+        Creates the classification prompt for Bedrock, enriched with BBMP
+        historical context when available.
         """
         categories_list = ", ".join(COMPLAINT_CATEGORIES)
-        
-        prompt = f"""You are an AI assistant helping to classify urban infrastructure complaints for the city of Bengaluru, India.
 
-Classify the following complaint into exactly ONE of these categories:
-{categories_list}
+        # Pull BBMP historical context if analysis has completed
+        bbmp_context = ""
+        try:
+            from bbmp_data_loader import get_bbmp_insights
+            insights = get_bbmp_insights()
+            if insights:
+                weights = insights.get("category_weights", {})
+                boosts = insights.get("hotspot_risk_boosts", {})
+                seasonal = insights.get("seasonal_warnings", [])
 
-Complaint Location: {location}
-Complaint Description: {description}
+                lines = []
+                if location in boosts:
+                    lines.append(
+                        f"- {location} is a historically high-complaint area "
+                        f"(risk boost: +{boosts[location]} points)."
+                    )
+                if weights:
+                    top_cats = sorted(weights.items(), key=lambda x: -x[1])[:3]
+                    lines.append(
+                        "- Historically high-frequency categories in Bengaluru: "
+                        + ", ".join(f"{c} (×{w:.1f})" for c, w in top_cats) + "."
+                    )
+                if seasonal:
+                    lines.append("- Seasonal patterns: " + "; ".join(seasonal))
 
-Respond with ONLY the category name (one word) followed by a confidence score (0.0 to 1.0) separated by a comma.
-Example response format: "pothole,0.95" or "flooding,0.87"
+                if lines:
+                    bbmp_context = (
+                        "\n\nHistorical BBMP grievance data context:\n"
+                        + "\n".join(lines)
+                        + "\nUse this context to improve classification accuracy.\n"
+                    )
+        except Exception:
+            pass
 
-Your response:"""
-        
+        prompt = (
+            f"You are an AI assistant helping to classify urban infrastructure complaints "
+            f"for the city of Bengaluru, India.\n\n"
+            f"Classify the following complaint into exactly ONE of these categories:\n"
+            f"{categories_list}"
+            f"{bbmp_context}\n"
+            f"Complaint Location: {location}\n"
+            f"Complaint Description: {description}\n\n"
+            f"Respond with ONLY the category name (one word) followed by a confidence score "
+            f"(0.0 to 1.0) separated by a comma.\n"
+            f'Example response format: "pothole,0.95" or "flooding,0.87"\n\n'
+            f"Your response:"
+        )
         return prompt
     
     def _parse_bedrock_response(self, completion: str) -> Tuple[str, float]:
@@ -393,16 +421,34 @@ Your response:"""
         time_window: str,
     ) -> str:
         """
-        Generate a 2-3 sentence natural language explanation for an incident prediction.
-        Falls back to a template string if Bedrock is unavailable.
+        Generate a 2-3 sentence natural language explanation for an incident prediction,
+        enriched with BBMP historical context when available.
         """
-        factors_text = ", ".join(
-            f.replace("_", " ") for f in contributing_factors
-        )
+        factors_text = ", ".join(f.replace("_", " ") for f in contributing_factors)
+
+        # Pull BBMP context for the explanation
+        bbmp_context = ""
+        try:
+            from bbmp_data_loader import get_bbmp_insights
+            insights = get_bbmp_insights()
+            if insights:
+                boosts = insights.get("hotspot_risk_boosts", {})
+                seasonal = insights.get("seasonal_warnings", [])
+                if area_name in boosts:
+                    bbmp_context += (
+                        f"\nHistorical data: {area_name} is a chronic hotspot "
+                        f"with a +{boosts[area_name]}-point historical risk boost."
+                    )
+                if seasonal:
+                    bbmp_context += f"\nSeasonal patterns: {'; '.join(seasonal)}"
+        except Exception:
+            pass
+
         prompt = (
             f"You are an urban risk analyst for Bengaluru, India.\n"
             f"Write exactly 2 sentences explaining this incident prediction to a city official.\n"
-            f"Be specific and actionable. Do not use bullet points.\n\n"
+            f"Be specific, reference historical patterns if relevant, and be actionable. "
+            f"Do not use bullet points.\n\n"
             f"Prediction details:\n"
             f"- Area: {area_name}\n"
             f"- Predicted incident: {incident_type.replace('_', ' ')}\n"
@@ -410,7 +456,8 @@ Your response:"""
             f"- Dominant complaint type: {dominant_category}\n"
             f"- Number of complaints in zone: {complaint_count}\n"
             f"- Contributing factors: {factors_text}\n"
-            f"- Expected time window: {time_window}\n\n"
+            f"- Expected time window: {time_window}"
+            f"{bbmp_context}\n\n"
             f"Your 2-sentence explanation:"
         )
 

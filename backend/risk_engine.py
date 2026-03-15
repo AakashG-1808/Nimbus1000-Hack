@@ -117,47 +117,50 @@ class RiskEngine:
     ) -> float:
         """
         Calculate comprehensive risk score for a zone.
-        
-        Args:
-            cluster: Cluster with complaints and density
-            weather: Current weather conditions (optional)
-            traffic_data: Traffic data dict (location -> TrafficData) (optional)
-            
-        Returns:
-            Risk score (0-100)
-            
-        Scoring Logic:
-            - Base: Complaint density (5+ per km² → +20 points)
-            - Weather: High rainfall (>10mm/hr) → +30 points for flood-related
-            - Traffic: High congestion → +15 points for traffic-related
-            
-        Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5
+        Incorporates BBMP historical pattern insights when available.
         """
         # Calculate base score from complaint density
         base_score = self.calculate_base_score(cluster.density_per_km2)
-        
-        # Start with base score
         risk_score = base_score
-        
-        # Apply weather modifier (if weather data provided)
+
+        # Apply weather modifier
         if weather:
-            weather_modifier = self._calculate_weather_modifier(cluster, weather)
-            risk_score += weather_modifier
-        
-        # Apply traffic modifier (if traffic data provided)
+            risk_score += self._calculate_weather_modifier(cluster, weather)
+
+        # Apply traffic modifier
         if traffic_data:
-            traffic_modifier = self._calculate_traffic_modifier(cluster, traffic_data)
-            risk_score += traffic_modifier
-        
-        # Ensure bounded 0-100
-        risk_score = max(0.0, min(100.0, risk_score))
-        
-        logger.debug(
-            f"Risk score calculated: base={base_score:.1f}, "
-            f"final={risk_score:.1f} for cluster {cluster.cluster_id}"
-        )
-        
-        return risk_score
+            risk_score += self._calculate_traffic_modifier(cluster, traffic_data)
+
+        # Apply BBMP historical boosts (if Bedrock analysis has completed)
+        try:
+            from bbmp_data_loader import get_bbmp_insights
+            insights = get_bbmp_insights()
+            if insights:
+                # Location-level boost for chronic hotspots
+                boosts = insights.get("hotspot_risk_boosts", {})
+                weights = insights.get("category_weights", {})
+
+                # Find the dominant location in this cluster
+                location_counts = {}
+                for c in cluster.complaints:
+                    location_counts[c.location] = location_counts.get(c.location, 0) + 1
+                if location_counts:
+                    dominant_location = max(location_counts, key=location_counts.get)
+                    boost = boosts.get(dominant_location, 0)
+                    if boost:
+                        risk_score += boost
+                        logger.debug(f"BBMP hotspot boost +{boost} for {dominant_location}")
+
+                # Category weight multiplier on the base score
+                dominant_cat = self._get_dominant_category(cluster.complaints)
+                weight = weights.get(dominant_cat, 1.0)
+                if weight != 1.0:
+                    risk_score = base_score * weight + (risk_score - base_score)
+                    logger.debug(f"BBMP category weight ×{weight} for {dominant_cat}")
+        except Exception:
+            pass  # Never let insights failure break scoring
+
+        return max(0.0, min(100.0, risk_score))
     
     def _calculate_weather_modifier(
         self,
@@ -394,6 +397,16 @@ class RiskEngine:
         with self._cache_lock:
             self._risk_zones_cache = risk_zones
 
+        # Fire SNS alerts for any new HIGH risk zones
+        try:
+            from sns_notifier import notify_high_risk_zone
+            from models import RiskLevel
+            for zone in risk_zones:
+                if zone.risk_level == RiskLevel.HIGH:
+                    notify_high_risk_zone(zone)
+        except Exception as e:
+            logger.warning(f"SNS notification failed: {e}")
+
         # Kick off background explanation generation (non-blocking)
         Thread(target=self._generate_explanations_background, args=(risk_zones,), daemon=True).start()
         
@@ -480,10 +493,12 @@ class RiskEngine:
                 logger.info(f"Cached explanation for {area_name} / {pred.incident_type}")
         except Exception as e:
             logger.warning(f"Background explanation generation failed: {e}")
+
+    def get_cached_risk_zones(self) -> List[RiskZone]:
         """
         Get the most recently calculated risk zones from cache.
         Triggers a fresh calculation if cache is empty (startup race condition).
-        
+
         Returns:
             List of cached risk zones
         """

@@ -289,19 +289,51 @@ def generate_clustered_complaints(
 
 def initialize_storage_with_simulated_data(storage) -> int:
     """
-    Initialize storage with 40+ simulated complaints.
-    
-    Args:
-        storage: InMemoryStorage instance to populate
-        
-    Returns:
-        Number of complaints added
+    Initialize storage with real BBMP data if available, otherwise simulated data.
+    Real data is loaded from backend/data/*.csv (BBMP grievances CSVs).
     """
-    # Generate 60 random complaints for more variety
-    complaints = generate_simulated_complaints(60)
-    
-    # Add all complaints to storage
-    for complaint in complaints:
+    # Try loading real BBMP data first
+    try:
+        from bbmp_data_loader import load_all_bbmp_data, analyze_bbmp_patterns_with_bedrock
+        real_complaints = load_all_bbmp_data()
+        if real_complaints:
+            for complaint in real_complaints:
+                storage.add_complaint(complaint)
+            print(f"[Data] Using real BBMP dataset: {len(real_complaints)} complaints")
+
+            # Run Bedrock pattern analysis in background so startup isn't blocked
+            from threading import Thread
+            Thread(
+                target=analyze_bbmp_patterns_with_bedrock,
+                args=(real_complaints,),
+                daemon=True,
+                name="bbmp-bedrock-analysis",
+            ).start()
+            print("[Data] BBMP Bedrock pattern analysis started in background")
+            return len(real_complaints)
+    except Exception as e:
+        print(f"[Data] BBMP loader error (falling back to simulated): {e}")
+
+    # Fallback: simulated data with hotspot clusters
+    print("[Data] No BBMP CSV found in backend/data/ — using simulated data")
+    all_complaints = []
+
+    # 40 random background complaints
+    all_complaints.extend(generate_simulated_complaints(40))
+
+    # High-density hotspots — 6-10 complaints in same location = high risk scores
+    hotspots = [
+        ("Koramangala", "pothole", 8),
+        ("Indiranagar", "traffic", 7),
+        ("Whitefield", "garbage", 6),
+        ("HSR Layout", "flooding", 6),
+        ("Marathahalli", "pothole", 9),
+        ("BTM Layout", "streetlight", 6),
+    ]
+    for location, category, count in hotspots:
+        all_complaints.extend(generate_clustered_complaints(location, category, count))
+
+    for complaint in all_complaints:
         storage.add_complaint(complaint)
-    
-    return len(complaints)
+
+    return len(all_complaints)

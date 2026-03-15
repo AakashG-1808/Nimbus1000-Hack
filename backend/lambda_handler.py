@@ -1,40 +1,63 @@
 """
 UrbanGuard AI System - AWS Lambda Handler
-Lambda handler wrapper for FastAPI using Mangum adapter
+Lambda handler wrapper for FastAPI using Mangum adapter.
+Also handles SQS trigger events for async complaint processing.
 """
 import os
 from mangum import Mangum
 from main import app
 
-
 # Create Lambda handler using Mangum adapter
-# Mangum wraps the FastAPI application to make it compatible with AWS Lambda
 handler = Mangum(app, lifespan="off")
 
 
 def lambda_handler(event, context):
     """
-    AWS Lambda handler function for FastAPI application.
-    
-    This function is invoked by AWS Lambda when requests come through API Gateway.
-    The Mangum adapter translates API Gateway events to ASGI format for FastAPI.
-    
-    Args:
-        event: API Gateway event containing HTTP request data
-        context: Lambda context object with runtime information
-        
-    Returns:
-        API Gateway response format with statusCode, headers, and body
-        
-    Environment Variables:
-        AWS_EXECUTION_ENV: Set by Lambda runtime (e.g., "AWS_Lambda_python3.11")
-        DYNAMODB_TABLE_COMPLAINTS: DynamoDB table name for complaints
-        DYNAMODB_TABLE_RISK_ZONES: DynamoDB table name for risk zones
-        DYNAMODB_TABLE_REPORTS: DynamoDB table name for daily reports
-        AWS_REGION: AWS region for DynamoDB client
-        
-    Performance:
-        Cold start: < 3 seconds (Requirement 19.5)
-        Warm invocation: < 500ms
+    AWS Lambda handler function.
+    Routes to SQS processor for SQS trigger events,
+    otherwise delegates to FastAPI via Mangum for API Gateway events.
     """
+    # SQS trigger — process queued complaints asynchronously
+    if event.get("Records") and event["Records"][0].get("eventSource") == "aws:sqs":
+        from sqs_handler import process_sqs_event
+        from storage import storage
+        count = process_sqs_event(event, storage)
+        return {"statusCode": 200, "body": f"Processed {count} complaints from SQS"}
+
+    # EventBridge scheduled rule — generate daily report
+    if event.get("source") == "aws.events" or event.get("detail-type") == "Scheduled Event":
+        try:
+            from report_generator import get_report_generator
+            from storage import storage
+            from weather_integrator import get_weather_integrator
+            from risk_engine import get_risk_engine
+            rg = get_report_generator()
+            report = rg.generate_daily_report()
+            # Also save to S3
+            try:
+                from s3_storage import save_daily_report
+                save_daily_report({
+                    "report_id": report.report_id,
+                    "date": report.date.isoformat(),
+                    "total_complaints": report.total_complaints,
+                    "ai_generated_summary": report.ai_generated_summary,
+                    "high_risk_zone_count": len(report.high_risk_zones),
+                })
+            except Exception:
+                pass
+            # SNS notification
+            try:
+                from sns_notifier import notify_daily_report
+                notify_daily_report(
+                    report.ai_generated_summary,
+                    report.total_complaints,
+                    len(report.high_risk_zones),
+                )
+            except Exception:
+                pass
+            return {"statusCode": 200, "body": "Daily report generated"}
+        except Exception as e:
+            return {"statusCode": 500, "body": f"Report generation failed: {e}"}
+
+    # Default: API Gateway → FastAPI
     return handler(event, context)
