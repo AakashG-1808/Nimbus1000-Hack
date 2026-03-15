@@ -84,7 +84,7 @@ class DynamoDBStorage:
     
     def _complaint_to_item(self, complaint: Complaint) -> dict:
         """Convert Complaint object to DynamoDB item"""
-        return self._python_to_dynamodb({
+        item = {
             "complaint_id": complaint.complaint_id,
             "location": complaint.location,
             "category": complaint.category,
@@ -94,13 +94,23 @@ class DynamoDBStorage:
                 "lat": complaint.coordinates[0],
                 "lon": complaint.coordinates[1]
             },
-            "classification_confidence": complaint.classification_confidence
-        })
+            "classification_confidence": complaint.classification_confidence,
+            "status": getattr(complaint, "status", "open"),
+        }
+        if getattr(complaint, "resolved_at", None):
+            item["resolved_at"] = complaint.resolved_at.timestamp()
+        if getattr(complaint, "expected_resolution_date", None):
+            item["expected_resolution_date"] = complaint.expected_resolution_date.timestamp()
+        if getattr(complaint, "resolution_note", None):
+            item["resolution_note"] = complaint.resolution_note
+        if getattr(complaint, "image_url", None):
+            item["image_url"] = complaint.image_url
+        return self._python_to_dynamodb(item)
     
     def _item_to_complaint(self, item: dict) -> Complaint:
         """Convert DynamoDB item to Complaint object"""
         item = self._dynamodb_to_python(item)
-        return Complaint(
+        c = Complaint(
             complaint_id=item["complaint_id"],
             location=item["location"],
             category=item["category"],
@@ -109,6 +119,12 @@ class DynamoDBStorage:
             coordinates=(item["coordinates"]["lat"], item["coordinates"]["lon"]),
             classification_confidence=item.get("classification_confidence", 1.0)
         )
+        c.status = item.get("status", "open")
+        c.resolved_at = datetime.fromtimestamp(item["resolved_at"]) if item.get("resolved_at") else None
+        c.expected_resolution_date = datetime.fromtimestamp(item["expected_resolution_date"]) if item.get("expected_resolution_date") else None
+        c.resolution_note = item.get("resolution_note")
+        c.image_url = item.get("image_url")
+        return c
     
     def _risk_zone_to_item(self, zone: RiskZone) -> dict:
         """Convert RiskZone object to DynamoDB item"""
@@ -223,6 +239,19 @@ class DynamoDBStorage:
             log_error(
                 component="DynamoDBStorage",
                 message=f"Failed to add complaint: {complaint.complaint_id}",
+                error=e
+            )
+            raise
+
+    def update_complaint(self, complaint: Complaint) -> None:
+        """Update an existing complaint in DynamoDB (e.g. after resolve)."""
+        try:
+            item = self._complaint_to_item(complaint)
+            self.complaints_table.put_item(Item=item)
+        except ClientError as e:
+            log_error(
+                component="DynamoDBStorage",
+                message=f"Failed to update complaint: {complaint.complaint_id}",
                 error=e
             )
             raise

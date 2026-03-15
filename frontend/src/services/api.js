@@ -71,6 +71,16 @@ export const complaintsAPI = {
   resolveComplaint: (complaintId, data) => {
     return api.patch(`/complaints/${complaintId}/resolve`, data);
   },
+
+  // Admin: upload image to S3, returns { url }
+  uploadImage: (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/upload-image', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000,
+    });
+  },
 };
 
 export const riskAPI = {

@@ -412,6 +412,70 @@ async def get_current_user_dep(request: Request):
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
+@api_router.post("/upload-image")
+async def upload_image(
+    request: Request,
+    current_user: dict = Depends(get_current_user_dep)
+):
+    """Admin-only: upload an image to S3 and return its public URL."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    import boto3, uuid
+    from botocore.config import Config as BotocoreConfig
+
+    # Parse multipart form
+    form = await request.form()
+    file = form.get("file")
+    if file is None or not hasattr(file, "read"):
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    bucket = os.getenv("S3_BUCKET_NAME", "urbanguard-data-dev-707859599311")
+    region = os.getenv("S3_REGION", os.getenv("AWS_REGION", "ap-south-2"))
+
+    # Reliable content-type → extension mapping (mimetypes.guess_extension is unreliable)
+    ALLOWED_TYPES = {
+        "image/jpeg": ".jpg",
+        "image/png":  ".png",
+        "image/webp": ".webp",
+        "image/gif":  ".gif",
+    }
+    content_type = (file.content_type or "").lower().split(";")[0].strip()
+    if content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail=f"File type not allowed: {content_type or 'unknown'}")
+
+    ext = ALLOWED_TYPES[content_type]
+    key = f"complaint-images/{uuid.uuid4().hex}{ext}"
+
+    try:
+        s3 = boto3.client(
+            "s3",
+            region_name=region,
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            # Force virtual-hosted style — required for newer regions like ap-south-2
+            config=BotocoreConfig(s3={"addressing_style": "virtual"}),
+            endpoint_url=f"https://s3.{region}.amazonaws.com",
+        )
+        data = await file.read()
+        if not data:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=data,
+            ContentType=content_type,
+        )
+        url = f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
+        return {"success": True, "url": url, "key": key}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("API", f"S3 upload failed: {e}", error=e)
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
 @api_router.get("/weather")
 async def get_weather():
     """
@@ -667,26 +731,36 @@ async def resolve_complaint(
     resolved_ids = []
     resolved_at = datetime.now()
 
-    with storage._lock:
-        complaint = next((c for c in storage._complaints if c.complaint_id == complaint_id), None)
+    # Parse optional date once
+    parsed_date = None
+    if resolve_data.expected_resolution_date:
+        try:
+            parsed_date = datetime.fromisoformat(resolve_data.expected_resolution_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format")
+
+    def _apply_details(c):
+        if parsed_date is not None:
+            c.expected_resolution_date = parsed_date
+        if resolve_data.resolution_note is not None:
+            c.resolution_note = resolve_data.resolution_note
+        if resolve_data.image_url is not None:
+            c.image_url = resolve_data.image_url
+
+    # Use lock only for InMemoryStorage (has _lock)
+    has_lock = hasattr(storage, '_lock')
+
+    def _do_resolve():
+        nonlocal resolved_ids
+        # Use unlocked variant if we already hold the lock, otherwise use normal
+        if has_lock and hasattr(storage, 'get_all_complaints_unlocked'):
+            all_complaints = storage.get_all_complaints_unlocked()
+        else:
+            all_complaints = storage.get_all_complaints()
+
+        complaint = next((c for c in all_complaints if c.complaint_id == complaint_id), None)
         if not complaint:
-            raise HTTPException(status_code=404, detail="Complaint not found")
-
-        # Parse optional date once
-        parsed_date = None
-        if resolve_data.expected_resolution_date:
-            try:
-                parsed_date = datetime.fromisoformat(resolve_data.expected_resolution_date)
-            except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid date format")
-
-        def _apply_details(c):
-            if parsed_date is not None:
-                c.expected_resolution_date = parsed_date
-            if resolve_data.resolution_note is not None:
-                c.resolution_note = resolve_data.resolution_note
-            if resolve_data.image_url is not None:
-                c.image_url = resolve_data.image_url
+            return None
 
         _apply_details(complaint)
 
@@ -696,7 +770,7 @@ async def resolve_complaint(
             resolved_ids.append(complaint_id)
 
             # Bulk-resolve all other open complaints at same location + category
-            for c in storage._complaints:
+            for c in all_complaints:
                 if (
                     c.complaint_id != complaint_id
                     and getattr(c, 'status', 'open') == 'open'
@@ -707,6 +781,26 @@ async def resolve_complaint(
                     c.status = "resolved"
                     c.resolved_at = resolved_at
                     resolved_ids.append(c.complaint_id)
+
+        # Persist changes to DynamoDB if applicable
+        if hasattr(storage, 'update_complaint'):
+            for c in all_complaints:
+                if c.complaint_id in resolved_ids or c.complaint_id == complaint_id:
+                    try:
+                        storage.update_complaint(c)
+                    except Exception:
+                        pass
+
+        return complaint
+
+    if has_lock:
+        with storage._lock:
+            complaint = _do_resolve()
+    else:
+        complaint = _do_resolve()
+
+    if complaint is None:
+        raise HTTPException(status_code=404, detail="Complaint not found")
 
     # Force immediate recalculation so the map updates right away
     if resolve_data.mark_resolved:

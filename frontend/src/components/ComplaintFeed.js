@@ -2,12 +2,6 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { complaintsAPI } from '../services/api';
 import './ComplaintFeed.css';
 
-/**
- * ComplaintFeed — tabbed pending / resolved complaint list.
- * Resolved complaints are deduplicated by location+category (showing count).
- * Every item is click-to-expand for full details.
- * Admins get the manage/resolve form on pending items.
- */
 const ComplaintFeed = ({
   complaints = [],
   loading = false,
@@ -19,10 +13,15 @@ const ComplaintFeed = ({
   const [activeTab, setActiveTab] = useState('pending');
   const [expandedKey, setExpandedKey] = useState(null);
   const [resolveState, setResolveState] = useState({});
+  const [search, setSearch] = useState('');
   const feedRef = useRef(null);
+  const searchRef = useRef(null);
 
-  // Reset expanded item when tab changes
-  useEffect(() => { setExpandedKey(null); }, [activeTab]);
+  // Reset expanded + search when tab changes
+  useEffect(() => {
+    setExpandedKey(null);
+    setSearch('');
+  }, [activeTab]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const fmt = (ts) => {
@@ -51,7 +50,33 @@ const ComplaintFeed = ({
     return { pct, cls, icon: conf >= 0.8 ? '🤖' : '🔑' };
   };
 
-  // ── Split complaints ──────────────────────────────────────────────────────
+  // Highlight matching text
+  const highlight = (text, query) => {
+    if (!query.trim()) return text;
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className="search-highlight">{text.slice(idx, idx + query.length)}</mark>
+        {text.slice(idx + query.length)}
+      </>
+    );
+  };
+
+  // ── Filter helpers ────────────────────────────────────────────────────────
+  const matchesSearch = (c, q) => {
+    if (!q.trim()) return true;
+    const lower = q.toLowerCase();
+    return (
+      c.location?.toLowerCase().includes(lower) ||
+      c.category?.toLowerCase().includes(lower) ||
+      fmtCat(c.category).toLowerCase().includes(lower) ||
+      c.description?.toLowerCase().includes(lower)
+    );
+  };
+
+  // ── Split + filter complaints ─────────────────────────────────────────────
   const pending = useMemo(() =>
     [...complaints]
       .filter(c => (c.status || 'open') === 'open')
@@ -60,19 +85,16 @@ const ComplaintFeed = ({
     [complaints]
   );
 
-  // Deduplicate resolved by location+category — keep the most-recent per group
   const resolvedGroups = useMemo(() => {
     const resolved = complaints.filter(c => c.status === 'resolved');
     const map = new Map();
     for (const c of resolved) {
       const key = `${c.location}||${c.category}`;
       if (!map.has(key)) {
-        map.set(key, { representative: c, count: 1, all: [c] });
+        map.set(key, { representative: c, count: 1 });
       } else {
         const g = map.get(key);
         g.count++;
-        g.all.push(c);
-        // Keep the most recently resolved as representative
         if (new Date(c.resolved_at) > new Date(g.representative.resolved_at)) {
           g.representative = c;
         }
@@ -83,9 +105,42 @@ const ComplaintFeed = ({
       .map(([key, g]) => ({ key, ...g }));
   }, [complaints]);
 
+  const filteredPending = useMemo(() =>
+    pending.filter(c => matchesSearch(c, search)),
+    [pending, search] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const filteredResolved = useMemo(() =>
+    resolvedGroups.filter(({ representative: c }) => matchesSearch(c, search)),
+    [resolvedGroups, search] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   // ── Resolve form helpers ──────────────────────────────────────────────────
-  const getForm = (id) => resolveState[id] || { date: '', note: '', imageUrl: '', saving: false, error: null };
+  const getForm = (id) => resolveState[id] || { date: '', note: '', imageUrl: '', uploading: false, saving: false, error: null };
   const setForm = (id, patch) => setResolveState(p => ({ ...p, [id]: { ...getForm(id), ...patch } }));
+
+  const handleImagePick = async (id, file) => {
+    if (!file) return;
+    setForm(id, { uploading: true, error: null });
+    try {
+      const res = await complaintsAPI.uploadImage(file);
+      setForm(id, { imageUrl: res.data.url, uploading: false });
+    } catch (e) {
+      // S3 upload failed — fall back to local base64 data URL so the feature still works
+      try {
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        setForm(id, { imageUrl: dataUrl, uploading: false, error: null });
+      } catch {
+        const msg = e?.response?.data?.detail || e?.message || 'Upload failed';
+        setForm(id, { uploading: false, error: `Image upload failed: ${msg}` });
+      }
+    }
+  };
 
   const handleSave = async (complaint, markResolved) => {
     if (markResolved) {
@@ -104,38 +159,17 @@ const ComplaintFeed = ({
         mark_resolved: markResolved,
       });
       if (onComplaintUpdate) onComplaintUpdate();
+      setForm(complaint.complaint_id, { saving: false, error: null });
       setExpandedKey(null);
     } catch {
       setForm(complaint.complaint_id, { saving: false, error: 'Failed to save. Try again.' });
     }
   };
 
-  // ── Counts for tab badges ─────────────────────────────────────────────────
   const pendingCount = pending.length;
   const resolvedCount = resolvedGroups.length;
 
-  // ── Loading / error states ────────────────────────────────────────────────
-  if (loading && complaints.length === 0) {
-    return (
-      <div className="complaint-feed-wrap">
-        <div className="feed-tabs">
-          <button className="feed-tab active">Pending</button>
-          <button className="feed-tab">Resolved</button>
-        </div>
-        <div className="complaint-feed">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="complaint-skeleton">
-              <div className="skeleton skeleton-badge" />
-              <div className="skeleton skeleton-line" />
-              <div className="skeleton skeleton-line short" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // ── Render a single complaint card ────────────────────────────────────────
+  // ── Pending card ──────────────────────────────────────────────────────────
   const renderPendingCard = (complaint) => {
     const isExpanded = expandedKey === complaint.complaint_id;
     const form = getForm(complaint.complaint_id);
@@ -143,7 +177,6 @@ const ComplaintFeed = ({
 
     return (
       <div key={complaint.complaint_id} className={`complaint-item ${catClass(complaint.category)}`}>
-        {/* Summary row — always visible */}
         <div
           className="complaint-summary"
           onClick={() => setExpandedKey(isExpanded ? null : complaint.complaint_id)}
@@ -152,7 +185,9 @@ const ComplaintFeed = ({
           aria-expanded={isExpanded}
         >
           <div className="complaint-header">
-            <span className={`complaint-category ${catClass(complaint.category)}`}>{fmtCat(complaint.category)}</span>
+            <span className={`complaint-category ${catClass(complaint.category)}`}>
+              {highlight(fmtCat(complaint.category), search)}
+            </span>
             <div className="complaint-header-right">
               <span className="complaint-timestamp">{fmt(complaint.timestamp)}</span>
               <span className="expand-chevron">{isExpanded ? '▲' : '▼'}</span>
@@ -162,16 +197,18 @@ const ComplaintFeed = ({
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
             </svg>
-            {complaint.location}
+            {highlight(complaint.location, search)}
           </div>
           {!isExpanded && (
             <div className="complaint-preview">
-              {complaint.description.length > 90 ? complaint.description.slice(0, 90) + '…' : complaint.description}
+              {highlight(
+                complaint.description.length > 90 ? complaint.description.slice(0, 90) + '…' : complaint.description,
+                search
+              )}
             </div>
           )}
         </div>
 
-        {/* Expanded detail */}
         {isExpanded && (
           <div className="complaint-detail">
             <p className="complaint-description">{complaint.description}</p>
@@ -186,7 +223,6 @@ const ComplaintFeed = ({
             )}
             <div className="complaint-id-label">ID: {complaint.complaint_id.slice(0, 8)}…</div>
 
-            {/* Admin manage panel */}
             {isAdmin && (
               <div className="admin-resolve-section">
                 <div className="admin-resolve-form">
@@ -197,17 +233,37 @@ const ComplaintFeed = ({
                     <textarea rows={2} placeholder="Add a resolution note…" value={form.note}
                       onChange={e => setForm(complaint.complaint_id, { note: e.target.value })} />
                   </label>
-                  <label>Image URL
-                    <input type="url" placeholder="https://…" value={form.imageUrl}
-                      onChange={e => setForm(complaint.complaint_id, { imageUrl: e.target.value })} />
+                  <label>
+                    Attach Image
+                    <div className="image-upload-row">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        id={`img-${complaint.complaint_id}`}
+                        style={{ display: 'none' }}
+                        onChange={e => handleImagePick(complaint.complaint_id, e.target.files[0])}
+                      />
+                      <label htmlFor={`img-${complaint.complaint_id}`} className="image-upload-btn">
+                        {form.uploading
+                          ? <><span className="btn-spinner" /> Uploading…</>
+                          : '📎 Choose file'}
+                      </label>
+                      {form.imageUrl && !form.uploading && (
+                        <a href={form.imageUrl} target="_blank" rel="noreferrer" className="image-preview-link">
+                          ✅ Uploaded
+                        </a>
+                      )}
+                    </div>
                   </label>
                   {form.error && <p className="resolve-error">{form.error}</p>}
                   <div className="resolve-actions">
-                    <button className="resolve-btn save" disabled={form.saving} onClick={() => handleSave(complaint, false)}>
-                      {form.saving ? 'Saving…' : 'Save Details'}
+                    <button className="resolve-btn save" disabled={form.saving || form.uploading} onClick={() => handleSave(complaint, false)}>
+                      {form.saving
+                        ? <><span className="btn-spinner" /> Saving…</>
+                        : 'Save Details'}
                     </button>
-                    <button className="resolve-btn mark-resolved" disabled={form.saving} onClick={() => handleSave(complaint, true)}>
-                      ✅ Mark as Resolved
+                    <button className="resolve-btn mark-resolved" disabled={form.saving || form.uploading} onClick={() => handleSave(complaint, true)}>
+                      {form.saving ? <><span className="btn-spinner" /> Working…</> : '✅ Mark as Resolved'}
                     </button>
                   </div>
                 </div>
@@ -219,6 +275,7 @@ const ComplaintFeed = ({
     );
   };
 
+  // ── Resolved card ─────────────────────────────────────────────────────────
   const renderResolvedCard = ({ key, representative: c, count }) => {
     const isExpanded = expandedKey === key;
     return (
@@ -231,9 +288,11 @@ const ComplaintFeed = ({
           aria-expanded={isExpanded}
         >
           <div className="complaint-header">
-            <span className={`complaint-category ${catClass(c.category)}`}>{fmtCat(c.category)}</span>
+            <span className={`complaint-category ${catClass(c.category)}`}>
+              {highlight(fmtCat(c.category), search)}
+            </span>
             <div className="complaint-header-right">
-              {count > 1 && <span className="complaint-count-badge">{count} complaints</span>}
+              {count > 1 && <span className="complaint-count-badge">{count}</span>}
               <span className="resolved-badge">✅ Resolved</span>
               <span className="expand-chevron">{isExpanded ? '▲' : '▼'}</span>
             </div>
@@ -242,11 +301,14 @@ const ComplaintFeed = ({
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
             </svg>
-            {c.location}
+            {highlight(c.location, search)}
           </div>
           {!isExpanded && (
             <div className="complaint-preview">
-              {c.description.length > 90 ? c.description.slice(0, 90) + '…' : c.description}
+              {highlight(
+                c.description.length > 90 ? c.description.slice(0, 90) + '…' : c.description,
+                search
+              )}
             </div>
           )}
         </div>
@@ -281,6 +343,7 @@ const ComplaintFeed = ({
   // ── Main render ───────────────────────────────────────────────────────────
   return (
     <div className="complaint-feed-wrap">
+
       {/* Tab bar */}
       <div className="feed-tabs">
         <button
@@ -299,17 +362,61 @@ const ComplaintFeed = ({
         </button>
       </div>
 
+      {/* Search bar */}
+      <div className="feed-search-wrap">
+        <div className="feed-search-inner">
+          <svg className="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            ref={searchRef}
+            className="feed-search-input"
+            type="text"
+            placeholder="Search location, type, description…"
+            value={search}
+            onChange={e => { setSearch(e.target.value); setExpandedKey(null); }}
+            aria-label="Search complaints"
+          />
+          {search && (
+            <button className="search-clear" onClick={() => { setSearch(''); searchRef.current?.focus(); }} aria-label="Clear search">
+              ×
+            </button>
+          )}
+        </div>
+        {search && (
+          <span className="search-result-count">
+            {activeTab === 'pending' ? filteredPending.length : filteredResolved.length} result{(activeTab === 'pending' ? filteredPending.length : filteredResolved.length) !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
       {/* Feed list */}
       <div className="complaint-feed" ref={feedRef}>
-        {activeTab === 'pending' && (
-          pending.length === 0
-            ? <div className="complaint-feed-empty"><p>No pending complaints</p></div>
-            : pending.map(renderPendingCard)
+        {/* Global loading overlay — shown when refreshing with existing data */}
+        {loading && complaints.length > 0 && (
+          <div className="feed-refresh-indicator">
+            <span className="feed-spinner" /> Refreshing…
+          </div>
         )}
-        {activeTab === 'resolved' && (
-          resolvedGroups.length === 0
-            ? <div className="complaint-feed-empty"><p>No resolved complaints yet</p></div>
-            : resolvedGroups.map(renderResolvedCard)
+
+        {/* Full loading state — no data yet */}
+        {loading && complaints.length === 0 ? (
+          <div className="feed-loading-state">
+            <div className="feed-spinner-large" />
+            <span>Loading complaints…</span>
+          </div>
+        ) : activeTab === 'pending' ? (
+          filteredPending.length === 0
+            ? <div className="complaint-feed-empty">
+                {search ? `No pending complaints matching "${search}"` : 'No pending complaints'}
+              </div>
+            : filteredPending.map(renderPendingCard)
+        ) : (
+          filteredResolved.length === 0
+            ? <div className="complaint-feed-empty">
+                {search ? `No resolved complaints matching "${search}"` : 'No resolved complaints yet'}
+              </div>
+            : filteredResolved.map(renderResolvedCard)
         )}
       </div>
 
