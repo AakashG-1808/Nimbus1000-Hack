@@ -206,22 +206,16 @@ class IncidentPredictor:
         """
         Determines prediction time window based on risk score.
         
-        Args:
-            risk_score: Zone risk score
-            
-        Returns:
-            Time window string
-            
-        Logic:
-            - "next 6 hours" for risk_score > 85
-            - "next 24 hours" for risk_score 70-85
-            
-        Note: This is part of task 8.2, but included here for completeness
+        - "next 6 hours" for risk_score > 85
+        - "next 24 hours" for risk_score 70-85
+        - "next 48 hours" for lower scores
         """
-        if risk_score > 50:
+        if risk_score > 85:
             return "next 6 hours"
-        else:
+        elif risk_score > 60:
             return "next 24 hours"
+        else:
+            return "next 48 hours"
     
     def _determine_contributing_factors(
         self,

@@ -655,31 +655,58 @@ async def resolve_complaint(
     resolve_data: ResolveComplaintRequest,
     current_user: dict = Depends(get_current_user_dep)
 ):
-    """Admin-only: update resolution details on a complaint."""
+    """Admin-only: update resolution details on a complaint.
+    
+    When mark_resolved=True, also bulk-resolves all other open complaints
+    at the same location AND same category so the map circle fully disappears.
+    """
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
 
     from storage import storage
+    resolved_ids = []
+    resolved_at = datetime.now()
+
     with storage._lock:
         complaint = next((c for c in storage._complaints if c.complaint_id == complaint_id), None)
         if not complaint:
             raise HTTPException(status_code=404, detail="Complaint not found")
 
+        # Parse optional date once
+        parsed_date = None
         if resolve_data.expected_resolution_date:
             try:
-                complaint.expected_resolution_date = datetime.fromisoformat(resolve_data.expected_resolution_date)
+                parsed_date = datetime.fromisoformat(resolve_data.expected_resolution_date)
             except ValueError:
                 raise HTTPException(status_code=400, detail="Invalid date format")
 
-        if resolve_data.resolution_note is not None:
-            complaint.resolution_note = resolve_data.resolution_note
+        def _apply_details(c):
+            if parsed_date is not None:
+                c.expected_resolution_date = parsed_date
+            if resolve_data.resolution_note is not None:
+                c.resolution_note = resolve_data.resolution_note
+            if resolve_data.image_url is not None:
+                c.image_url = resolve_data.image_url
 
-        if resolve_data.image_url is not None:
-            complaint.image_url = resolve_data.image_url
+        _apply_details(complaint)
 
         if resolve_data.mark_resolved:
             complaint.status = "resolved"
-            complaint.resolved_at = datetime.now()
+            complaint.resolved_at = resolved_at
+            resolved_ids.append(complaint_id)
+
+            # Bulk-resolve all other open complaints at same location + category
+            for c in storage._complaints:
+                if (
+                    c.complaint_id != complaint_id
+                    and getattr(c, 'status', 'open') == 'open'
+                    and c.location == complaint.location
+                    and c.category == complaint.category
+                ):
+                    _apply_details(c)
+                    c.status = "resolved"
+                    c.resolved_at = resolved_at
+                    resolved_ids.append(c.complaint_id)
 
     # Force immediate recalculation so the map updates right away
     if resolve_data.mark_resolved:
@@ -690,10 +717,16 @@ async def resolve_complaint(
             cd.recalculate_clusters()
             re = get_risk_engine()
             re.calculate_all_risk_zones()
-        except Exception as e:
-            logger.warning(f"Post-resolve recalculation failed: {e}")
+        except Exception:
+            pass  # Don't fail the response if recalculation fails
 
-    return {"success": True, "complaint_id": complaint_id, "status": complaint.status}
+    return {
+        "success": True,
+        "complaint_id": complaint_id,
+        "status": complaint.status,
+        "resolved_count": len(resolved_ids),
+        "resolved_ids": resolved_ids,
+    }
 
 
 @api_router.get("/clusters")

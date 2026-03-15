@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, memo } from 'react';
 import { MapContainer, TileLayer, Circle, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -32,10 +32,13 @@ const CLUSTER_GRID_SIZE = 0.003;
  */
 const MapController = ({ center, zoom }) => {
   const map = useMap();
+  const initializedRef = useRef(false);
   
   useEffect(() => {
-    if (center && zoom) {
+    // Only set view once on mount, never on re-renders
+    if (!initializedRef.current && center && zoom) {
       map.setView(center, zoom);
+      initializedRef.current = true;
     }
   }, [map, center, zoom]);
   
@@ -114,16 +117,23 @@ const createClusterIcon = (count) => {
   const size = count >= 50 ? 48 : count >= 20 ? 42 : 36;
   const fontSize = count >= 50 ? 14 : 12;
   const html = `
-    <div class="cluster-marker" style="width:${size}px;height:${size}px;">
-      <div class="cluster-inner">
-        <span style="font-size:${fontSize}px;">${count}</span>
-      </div>
+    <div style="
+      width:${size}px;height:${size}px;
+      border-radius:50%;
+      background:radial-gradient(circle at 30% 30%,#1d4ed8,#0f172a);
+      box-shadow:0 4px 12px rgba(15,23,42,0.35);
+      border:2.5px solid rgba(255,255,255,0.95);
+      display:flex;align-items:center;justify-content:center;
+    ">
+      <span style="
+        color:#fff;font-weight:700;font-size:${fontSize}px;
+        font-family:system-ui,sans-serif;line-height:1;
+      ">${count}</span>
     </div>
   `;
-
   return L.divIcon({
     html,
-    className: 'cluster-marker-icon',
+    className: '',
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     popupAnchor: [0, -size / 2]
@@ -170,12 +180,10 @@ const MapVisualizer = ({
     return complaints
       .map((complaint) => {
         const coords = complaint.coordinates;
-        if (!coords || (!coords.latitude && !coords[0])) {
-          return null;
-        }
-        const lat = coords.latitude || coords[0];
-        const lon = coords.longitude || coords[1];
-        if (typeof lat !== 'number' || typeof lon !== 'number') {
+        if (!coords) return null;
+        const lat = coords.latitude != null ? coords.latitude : coords[0];
+        const lon = coords.longitude != null ? coords.longitude : coords[1];
+        if (typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon)) {
           return null;
         }
         return { ...complaint, _lat: lat, _lon: lon };
@@ -190,9 +198,9 @@ const MapVisualizer = ({
 
     const clusterMap = new Map();
     normalizedComplaints.forEach((complaint) => {
-      const latKey = Math.round(complaint._lat / CLUSTER_GRID_SIZE) * CLUSTER_GRID_SIZE;
-      const lonKey = Math.round(complaint._lon / CLUSTER_GRID_SIZE) * CLUSTER_GRID_SIZE;
-      const key = `${latKey.toFixed(4)}-${lonKey.toFixed(4)}`;
+      const latBucket = Math.round(complaint._lat / CLUSTER_GRID_SIZE);
+      const lonBucket = Math.round(complaint._lon / CLUSTER_GRID_SIZE);
+      const key = `${latBucket}-${lonBucket}`;
       if (!clusterMap.has(key)) {
         clusterMap.set(key, []);
       }
@@ -227,29 +235,18 @@ const MapVisualizer = ({
     return { clusters: clusterResults, singles: singleResults };
   }, [normalizedComplaints, enableClustering]);
 
-  // Log map initialization
-  useEffect(() => {
-    console.log('MapVisualizer initialized with:', {
-      riskZones: riskZones.length,
-      complaints: complaints.length,
-      center: BENGALURU_CENTER,
-      zoom: DEFAULT_ZOOM
-    });
-  }, []);
-
-  // Handle map updates when data changes
-  useEffect(() => {
-    console.log('MapVisualizer data updated:', {
-      riskZones: riskZones.length,
-      complaints: complaints.length
-    });
-  }, [riskZones, complaints]);
+  // intentionally empty — map is initialized via MapContainer props
 
   return (
     <div className="map-visualizer">
-      {(loading || error) && (
-        <div className={`map-overlay ${error ? 'error' : ''}`}>
-          {error ? error : 'Loading map data...'}
+      {(loading && riskZones.length === 0 && !error) && (
+        <div className="map-overlay">
+          Loading map data...
+        </div>
+      )}
+      {error && riskZones.length === 0 && (
+        <div className="map-overlay error">
+          {error}
         </div>
       )}
       <MapContainer
@@ -340,7 +337,7 @@ const MapVisualizer = ({
         {/* Validates: Requirements 11.4, 11.5 */}
         {clusters.map((cluster) => (
           <Marker
-            key={`cluster-${cluster.lat}-${cluster.lon}-${cluster.count}`}
+            key={`cluster-${cluster.lat.toFixed(4)}-${cluster.lon.toFixed(4)}`}
             position={[cluster.lat, cluster.lon]}
             icon={createClusterIcon(cluster.count)}
           >
@@ -456,4 +453,4 @@ const MapVisualizer = ({
   );
 };
 
-export default MapVisualizer;
+export default memo(MapVisualizer);
