@@ -1,6 +1,20 @@
 # Nimbus1000-Hack
 
-This repository contains **UrbanGuard AI System**, an AI-powered urban infrastructure monitoring and risk prediction platform for Bengaluru.
+This repository contains **UrbanGuard AI System**, an AI-powered urban infrastructure monitoring and risk prediction platform built for Bengaluru.
+
+## Project Introduction
+
+UrbanGuard AI is designed to help city administrators shift from reactive issue handling to proactive urban risk management. Instead of only responding after citizens report severe incidents, the platform continuously gathers complaint activity, applies AI-assisted categorization, and surfaces emerging risk hotspots before they escalate.
+
+The project combines a FastAPI backend and a React frontend to deliver an end-to-end civic operations workflow: complaint reporting, live monitoring, risk scoring, and trend-based decision support. It integrates contextual signals such as weather and traffic, then combines them with complaint patterns to provide a clearer operational picture of infrastructure health across the city.
+
+At its core, UrbanGuard AI focuses on practical outcomes for governance teams:
+- Faster identification of high-risk zones
+- Better prioritization of field response and maintenance resources
+- Improved visibility into recurring urban problems
+- Daily, data-informed reporting for planning and escalation
+
+The system is built to run in both local and cloud-enhanced modes. In local development, it can operate with fallback logic and local/in-memory storage; in production-ready setups, it can use AWS services for stronger AI classification and persistent data handling.
 
 ## Repository Layout
 
@@ -86,4 +100,3 @@ npm test -- --watchAll=false
 - Main project docs: `Nimbus-1000-Urbanguard/README.md`
 - Quick start: `Nimbus-1000-Urbanguard/QUICK_START.md`
 - Detailed setup: `Nimbus-1000-Urbanguard/SETUP_GUIDE.md`
-
