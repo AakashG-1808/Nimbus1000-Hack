@@ -27,7 +27,7 @@ Nimbus1000-Hack/
 1. Move into the main project directory:
 
 ```bash
-cd Nimbus1000-Hack
+cd Nimbus1000-Hack/Nimbus-1000-Urbanguard
 ```
 
 2. Create Virtual Environment:
@@ -42,8 +42,6 @@ source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python -m uvicorn main:app --reload --port 8000
 ```
@@ -61,14 +59,14 @@ npm start
 Backend:
 
 ```bash
-cd Nimbus1000-Hack//backend
+cd Nimbus1000-Hack/Nimbus-1000-Urbanguard/backend
 python -m pytest
 ```
 
 Frontend:
 
 ```bash
-cd Nimbus1000-Hack/frontend
+cd Nimbus1000-Hack/Nimbus-1000-Urbanguard/frontend
 npm test -- --watchAll=false
 ```
 
