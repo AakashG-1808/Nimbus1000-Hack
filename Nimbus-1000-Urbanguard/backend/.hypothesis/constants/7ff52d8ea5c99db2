@@ -1,0 +1,4 @@
+# file: /home/runner/work/Nimbus1000-Hack/Nimbus1000-Hack/Nimbus-1000-Urbanguard/backend/models.py
+# hypothesis_version: 6.152.1
+
+[1.0, 'construction', 'flooding', 'garbage', 'high', 'low', 'medium', 'noise', 'open', 'openweathermap', 'pothole', 'streetlight', 'traffic', 'water_supply']

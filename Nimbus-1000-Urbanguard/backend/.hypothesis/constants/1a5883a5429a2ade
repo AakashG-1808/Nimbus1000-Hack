@@ -1,0 +1,4 @@
+# file: /home/runner/work/Nimbus1000-Hack/Nimbus1000-Hack/Nimbus-1000-Urbanguard/backend/ai_classifier.py
+# hypothesis_version: 6.152.1
+
+[0.0, 0.1, 0.3, 0.4, 0.5, 0.85, 0.9, 1.0, 100, 150, ' (API key auth)', ' (IAM auth)', ',', ', ', '.', '; ', 'AWS_BEDROCK_REGION', 'AWS_REGION', 'Authorization', 'BEDROCK_API_KEY', 'BEDROCK_MODEL_ID', 'CLOSED', 'Content-Type', 'HALF_OPEN', 'No Bedrock client', 'OPEN', '_', '_use_api_key', 'amazon.nova', 'anthropic', 'anthropic_version', 'ap-south-2', 'application/json', 'bedrock-2023-05-31', 'bedrock-api-key', 'bedrock-runtime', 'body', 'category_weights', 'content', 'garbage', 'generated_text', 'hotspot_risk_boosts', 'max_attempts', 'max_tokens', 'message', 'messages', 'output', 'prompt', 'role', 'seasonal_warnings', 'temperature', 'text', 'user']

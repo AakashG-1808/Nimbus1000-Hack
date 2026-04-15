@@ -1,0 +1,4 @@
+# file: /home/runner/work/Nimbus1000-Hack/Nimbus1000-Hack/Nimbus-1000-Urbanguard/backend/incident_predictor.py
+# hypothesis_version: 6.152.1
+
+[25.0, 'construction', 'construction_hazard', 'flooding', 'garbage', 'high_rainfall', 'high_wind', 'infrastructure_issue', 'lighting_failure', 'mixed', 'next 24 hours', 'next 48 hours', 'next 6 hours', 'noise', 'noise_pollution', 'pothole', 'road_damage', 'streetlight', 'traffic', 'traffic_congestion', 'traffic_gridlock', 'waste_accumulation', 'water_shortage', 'water_supply']
