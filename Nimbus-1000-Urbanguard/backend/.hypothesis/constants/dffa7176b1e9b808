@@ -1,4 +1,0 @@
-# file: /home/runner/work/Nimbus1000-Hack/Nimbus1000-Hack/Nimbus-1000-Urbanguard/backend/weather_integrator.py
-# hypothesis_version: 6.152.1
-
-[0.0, 3.6, 10.0, 25.0, 60.0, '1h', 'Bengaluru', 'IN', 'appid', 'cache', 'default', 'humidity', 'main', 'metric', 'openweathermap', 'q', 'rain', 'speed', 'temp', 'units', 'wind']

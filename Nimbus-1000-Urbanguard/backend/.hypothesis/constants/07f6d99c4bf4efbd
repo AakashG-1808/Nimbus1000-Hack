@@ -1,4 +1,0 @@
-# file: /home/runner/work/Nimbus1000-Hack/Nimbus1000-Hack/Nimbus-1000-Urbanguard/backend/report_generator.py
-# hypothesis_version: 6.152.1
-
-[', ', 'complaint_count', 'dominant_category', 'high_risk_zone_count', 'high_risk_zones', 'incident_type', 'location', 'next 6 hours', 'predicted_incidents', 'prediction_count', 'risk_score', 'time_window', 'total_complaints', 'weather_summary']

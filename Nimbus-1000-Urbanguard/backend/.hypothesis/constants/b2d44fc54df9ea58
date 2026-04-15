@@ -1,4 +1,0 @@
-# file: /home/runner/work/Nimbus1000-Hack/Nimbus1000-Hack/Nimbus-1000-Urbanguard/backend/simulated_data.py
-# hypothesis_version: 6.152.1
-
-[0.05, 0.08, 0.1, 0.12, 0.15, 0.18, 0.2, 0.4, 0.7, 0.9, 1.0, 'BTM Layout', 'HSR Layout', 'Indiranagar', 'Koramangala', 'Marathahalli', 'Whitefield', 'construction', 'flooding', 'garbage', 'noise', 'pothole', 'streetlight', 'traffic', 'water_supply']
