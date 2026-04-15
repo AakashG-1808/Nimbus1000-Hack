@@ -22,6 +22,15 @@ Nimbus1000-Hack/
 - Weather and traffic context integration
 - Trend analytics and daily risk reporting
 
+## AWS Services Used
+
+| Service | Purpose |
+|---|---|
+| **Amazon Bedrock** (Claude v2) | AI-powered complaint classification and categorisation |
+| **Amazon DynamoDB** | Production-grade persistent storage for complaints and risk data |
+
+Credentials are supplied via environment variables (`AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`). Both services are **optional for local development** — the system falls back to keyword-based classification and in-memory storage when no AWS credentials are configured. See `Nimbus-1000-Urbanguard/QUICK_START.md` for full configuration details.
+
 ## Quick Start
 
 1. Move into the main project directory:
