@@ -32,7 +32,6 @@ Nimbus1000-Hack/
 
 Credentials are supplied via environment variables (`AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`). All three services are **optional for local development** — the system falls back to keyword-based classification, in-memory storage, and local file paths when no AWS credentials are configured. See `Nimbus-1000-Urbanguard/QUICK_START.md` for full configuration details.
 
-> **Note:** Authentication uses a custom HS256 JWT implementation (`JWT_SECRET` env var). Amazon Cognito is **not** used.
 
 ## Quick Start
 
