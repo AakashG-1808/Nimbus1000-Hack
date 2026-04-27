@@ -4,7 +4,7 @@ This repository contains **UrbanGuard AI System**, an AI-powered urban infrastru
 
 ## Project Introduction
 
-UrbanGuard AI is designed to help city administrators shift from reactive issue handling to proactive urban risk management. Instead of only responding after citizens report severe incidents, the platform continuously gathers complaint activity, applies AI-assisted categorization, and surfaces emerging risk hotspots before they escalate.
+UrbanGuard AI is designed to help city administrators shift from reactive issue handling to proactive urban risk management. Instead of only responding after citizens report severe incidents, the platform continuously gathers complaint activity, applies AI-assisted categorisation, and surfaces emerging risk hotspots before they escalate.
 
 The project combines a FastAPI backend and a React frontend to deliver an end-to-end civic operations workflow: complaint reporting, live monitoring, risk scoring, and trend-based decision support. It integrates contextual signals such as weather and traffic, then combines them with complaint patterns to provide a clearer operational picture of infrastructure health across the city.
 
